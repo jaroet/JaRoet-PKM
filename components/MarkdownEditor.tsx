@@ -11,6 +11,7 @@ interface MarkdownEditorProps {
 
 const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, onClose, onSave }) => {
   const [content, setContent] = useState('');
+  const [parsedHtml, setParsedHtml] = useState('');
   const [isPreview, setIsPreview] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -20,6 +21,21 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, onClose, 
       setTimeout(() => textareaRef.current?.focus(), 100);
     }
   }, [note, isOpen]);
+
+  useEffect(() => {
+    const parse = async () => {
+        try {
+            // Ensure we handle potential async return from marked
+            const html = await marked.parse(content || '', { breaks: true, gfm: true });
+            setParsedHtml(html);
+        } catch (e) {
+            console.error('Markdown parse error:', e);
+            setParsedHtml('<p>Error rendering markdown.</p>');
+        }
+    };
+    const timeout = setTimeout(parse, 100);
+    return () => clearTimeout(timeout);
+  }, [content]);
 
   if (!isOpen || !note) return null;
 
@@ -32,10 +48,6 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, onClose, 
         onSave(note.id, content);
         onClose();
     }
-  };
-
-  const renderMarkdown = () => {
-    return { __html: marked.parse(content) as string };
   };
 
   return (
@@ -72,7 +84,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, onClose, 
             {isPreview ? (
                 <div 
                     className="w-full h-full p-6 overflow-auto prose dark:prose-invert max-w-none"
-                    dangerouslySetInnerHTML={renderMarkdown()}
+                    dangerouslySetInnerHTML={{ __html: parsedHtml }}
                 />
             ) : (
                 <textarea

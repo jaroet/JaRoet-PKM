@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { db, getTopology, createNote, updateNote, getFavorites, toggleFavorite, seedDatabase, getNote, getAllNotes, importNotes, getHomeNoteId, searchNotes, getFontSize, getNoteCount } from './services/db';
+import { db, getTopology, createNote, updateNote, getFavorites, toggleFavorite, seedDatabase, getNote, getAllNotes, importNotes, getHomeNoteId, searchNotes, getFontSize, getNoteCount, getVaultList, getCurrentVaultName, switchVault } from './services/db';
 import { Note, Section, Topology, SearchResult } from './types';
 import NoteCard from './components/NoteCard';
 import LinkerModal from './components/LinkerModal';
@@ -31,6 +30,7 @@ function App() {
 
   // Modals & UI State
   const [showFavDropdown, setShowFavDropdown] = useState(false);
+  const [showVaultDropdown, setShowVaultDropdown] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [activeSearchIndex, setActiveSearchIndex] = useState(0); // For keyboard nav in search
@@ -254,7 +254,7 @@ function App() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `nexusnode_backup_${Date.now()}.json`;
+    a.download = `nexusnode_backup_${getCurrentVaultName()}_${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -667,6 +667,38 @@ function App() {
                 <button onClick={importData} title="Import JSON" className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-primary">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                 </button>
+                
+                {/* Vault Switcher */}
+                <div className="relative">
+                    <button 
+                        onClick={() => setShowVaultDropdown(!showVaultDropdown)}
+                        title="Open Vault" 
+                        className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-primary"
+                    >
+                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+                    </button>
+                    {showVaultDropdown && (
+                        <div className="absolute top-full right-0 mt-2 w-56 bg-card border border-gray-200 dark:border-gray-700 shadow-xl rounded-md z-50 max-h-80 overflow-y-auto">
+                            <div className="p-2 font-bold text-xs uppercase text-gray-500 border-b dark:border-gray-700">Vaults</div>
+                            {getVaultList().map(v => (
+                                <div 
+                                    key={v}
+                                    className={`px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer text-sm flex justify-between items-center ${
+                                        v === getCurrentVaultName() ? 'text-primary font-bold' : ''
+                                    }`}
+                                    onClick={() => {
+                                        switchVault(v);
+                                        setShowVaultDropdown(false);
+                                    }}
+                                >
+                                    <span className="truncate">{v}</span>
+                                    {v === getCurrentVaultName() && <span>•</span>}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
             </div>
         </div>
 
@@ -677,8 +709,8 @@ function App() {
             className="flex-1 bg-gray-100 dark:bg-zinc-950 p-6 overflow-hidden outline-none relative" 
             tabIndex={0}
         >
-            
-            <div className="grid grid-cols-[25%_50%_25%] grid-rows-[1fr_minmax(150px,auto)_1fr] gap-6 h-full w-full">
+            {/* Changed from percentages to fractions to handle gap without overflow */}
+            <div className="grid grid-cols-[1fr_2fr_1fr] grid-rows-[1fr_minmax(150px,auto)_1fr] gap-6 h-full w-full">
                 
                 {/* 1. Uppers (Top Row, Spanning) */}
                 {/* Changed rounded-lg to rounded-3xl and bg to white/zinc-900 */}
@@ -766,8 +798,9 @@ function App() {
             <div>
                 Number of notes: {totalNoteCount}
             </div>
-            <div className="hidden xl:block opacity-80">
-                Arrows: Nav | Space: Recenter | Enter: Focus | Shift+Enter: Edit | Ctrl+Arrows: Link | F2: Rename | Bksp: Unlink
+            {/* Removed 'hidden xl:block' to ensure visibility on all screen sizes, added truncate for safety */}
+            <div className="opacity-80 truncate ml-4">
+                Arrows: Nav | Space: Recenter | Enter: Focus | Shift+Enter: Edit | Ctrl+Arrows: Link | F2: Rename | Bksp: Unlink | DB: {getCurrentVaultName()}
             </div>
         </div>
 

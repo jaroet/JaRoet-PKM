@@ -1,13 +1,87 @@
 import Dexie, { Table } from 'dexie';
 import { Note, Topology, SearchResult } from '../types';
 
+// --- Vault Management ---
+
+const VAULT_LIST_KEY = 'nexusnode_vaults';
+const CURRENT_VAULT_KEY = 'nexusnode_current_vault';
+const DEFAULT_VAULT = 'NexusNodeDB';
+
+// Initialize Vault configuration if missing
+if (!localStorage.getItem(VAULT_LIST_KEY)) {
+    localStorage.setItem(VAULT_LIST_KEY, JSON.stringify([DEFAULT_VAULT]));
+}
+if (!localStorage.getItem(CURRENT_VAULT_KEY)) {
+    localStorage.setItem(CURRENT_VAULT_KEY, DEFAULT_VAULT);
+}
+
+export const getVaultList = (): string[] => {
+    try {
+        return JSON.parse(localStorage.getItem(VAULT_LIST_KEY) || '[]');
+    } catch {
+        return [DEFAULT_VAULT];
+    }
+};
+
+export const getCurrentVaultName = (): string => {
+    return localStorage.getItem(CURRENT_VAULT_KEY) || DEFAULT_VAULT;
+};
+
+export const switchVault = (name: string) => {
+    if (getVaultList().includes(name)) {
+        localStorage.setItem(CURRENT_VAULT_KEY, name);
+        window.location.reload();
+    }
+};
+
+export const createVault = (name: string) => {
+    const list = getVaultList();
+    const sanitizedName = name.trim();
+    if (sanitizedName && !list.includes(sanitizedName)) {
+        list.push(sanitizedName);
+        localStorage.setItem(VAULT_LIST_KEY, JSON.stringify(list));
+        localStorage.setItem(CURRENT_VAULT_KEY, sanitizedName); // Auto switch to new
+        window.location.reload();
+    }
+};
+
+export const deleteCurrentVault = async () => {
+    const current = getCurrentVaultName();
+    
+    // Close connection before deletion
+    db.close();
+    await Dexie.delete(current);
+    
+    let list = getVaultList();
+    list = list.filter(v => v !== current);
+    
+    // Ensure there is always one vault
+    if (list.length === 0) list.push(DEFAULT_VAULT);
+    
+    localStorage.setItem(VAULT_LIST_KEY, JSON.stringify(list));
+    localStorage.setItem(CURRENT_VAULT_KEY, list[0]); // Switch to first available
+    window.location.reload();
+};
+
+export const resetCurrentVault = async () => {
+    // Clear all tables but keep the DB structure
+    await db.transaction('rw', db.notes, db.meta, async () => {
+        await db.notes.clear();
+        await db.meta.clear();
+    });
+    window.location.reload();
+};
+
+
+// --- Database Class ---
+
 // Extend Dexie
 class PKMDatabase extends Dexie {
   notes!: Table<Note, string>;
   meta!: Table<{ key: string; value: any }, string>;
 
   constructor() {
-    super('NexusNodeDB');
+    super(getCurrentVaultName());
     (this as any).version(1).stores({
       notes: 'id, title, *linksTo, *relatedTo', // Indexes required by prompt
       meta: 'key',
