@@ -27,6 +27,26 @@ export const getCurrentVaultName = (): string => {
     return localStorage.getItem(CURRENT_VAULT_KEY) || DEFAULT_VAULT;
 };
 
+// --- Database Class ---
+
+// Extend Dexie
+class PKMDatabase extends Dexie {
+  notes!: Table<Note, string>;
+  meta!: Table<{ key: string; value: any }, string>;
+
+  constructor() {
+    super(getCurrentVaultName());
+    (this as any).version(1).stores({
+      notes: 'id, title, *linksTo, *relatedTo', // Indexes required by prompt
+      meta: 'key',
+    });
+  }
+}
+
+export const db = new PKMDatabase();
+
+// --- Vault Operations ---
+
 export const switchVault = (name: string) => {
     if (getVaultList().includes(name)) {
         localStorage.setItem(CURRENT_VAULT_KEY, name);
@@ -49,7 +69,7 @@ export const deleteCurrentVault = async () => {
     const current = getCurrentVaultName();
     
     // Close connection before deletion
-    db.close();
+    (db as any).close();
     await Dexie.delete(current);
     
     let list = getVaultList();
@@ -65,31 +85,13 @@ export const deleteCurrentVault = async () => {
 
 export const resetCurrentVault = async () => {
     // Clear all tables but keep the DB structure
-    await db.transaction('rw', db.notes, db.meta, async () => {
+    await (db as any).transaction('rw', db.notes, db.meta, async () => {
         await db.notes.clear();
         await db.meta.clear();
     });
     window.location.reload();
 };
 
-
-// --- Database Class ---
-
-// Extend Dexie
-class PKMDatabase extends Dexie {
-  notes!: Table<Note, string>;
-  meta!: Table<{ key: string; value: any }, string>;
-
-  constructor() {
-    super(getCurrentVaultName());
-    (this as any).version(1).stores({
-      notes: 'id, title, *linksTo, *relatedTo', // Indexes required by prompt
-      meta: 'key',
-    });
-  }
-}
-
-export const db = new PKMDatabase();
 
 // --- Seed Data ---
 export const seedDatabase = async () => {

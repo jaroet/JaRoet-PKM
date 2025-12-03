@@ -12,20 +12,24 @@ interface MarkdownEditorProps {
 const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, onClose, onSave }) => {
   const [content, setContent] = useState('');
   const [parsedHtml, setParsedHtml] = useState('');
-  const [isPreview, setIsPreview] = useState(false);
+  const [isPreview, setIsPreview] = useState(true); // Default to View Mode
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
+  // Initialize state when modal opens
   useEffect(() => {
     if (note && isOpen) {
       setContent(note.content || '');
-      setTimeout(() => textareaRef.current?.focus(), 100);
+      setIsPreview(true);
+      // Focus container to capture key events in view mode
+      setTimeout(() => containerRef.current?.focus(), 100);
     }
   }, [note, isOpen]);
 
+  // Parse markdown whenever content changes
   useEffect(() => {
     const parse = async () => {
         try {
-            // Ensure we handle potential async return from marked
             const html = await marked.parse(content || '', { breaks: true, gfm: true });
             setParsedHtml(html);
         } catch (e) {
@@ -37,28 +41,59 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, onClose, 
     return () => clearTimeout(timeout);
   }, [content]);
 
-  if (!isOpen || !note) return null;
+  const handleToggleMode = () => {
+      if (isPreview) {
+          // Switch to Edit Mode
+          setIsPreview(false);
+          setTimeout(() => textareaRef.current?.focus(), 50);
+      } else {
+          // Switch to View Mode -> Save Content
+          if (note) onSave(note.id, content);
+          setIsPreview(true);
+          setTimeout(() => containerRef.current?.focus(), 50);
+      }
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // ESC - Close without saving
     if (e.key === 'Escape') {
+      e.preventDefault();
       onClose();
+      return;
     }
-    // Ctrl+Enter to save and close
+    
+    // Ctrl+E / Cmd+E - Toggle Mode
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'e') {
+        e.preventDefault();
+        handleToggleMode();
+        return;
+    }
+
+    // Ctrl+Enter - Save and Close
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        onSave(note.id, content);
+        e.preventDefault();
+        if (note) onSave(note.id, content);
         onClose();
     }
   };
 
+  if (!isOpen || !note) return null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="w-full max-w-4xl h-[80vh] bg-background rounded-lg shadow-2xl flex flex-col border border-gray-200 dark:border-gray-800">
+      <div 
+        ref={containerRef}
+        tabIndex={0} // Allow div to receive focus
+        onKeyDown={handleKeyDown}
+        className="w-full max-w-4xl h-[80vh] bg-background rounded-lg shadow-2xl flex flex-col border border-gray-200 dark:border-gray-800 outline-none"
+      >
         <div className="flex justify-between items-center p-4 border-b dark:border-gray-700">
-          <h2 className="text-xl font-bold">{note.title}</h2>
-          <div className="flex gap-2">
+          <h2 className="text-xl font-bold truncate pr-4">{note.title}</h2>
+          <div className="flex gap-2 flex-shrink-0">
             <button
-              onClick={() => setIsPreview(!isPreview)}
-              className="px-3 py-1 rounded bg-gray-200 dark:bg-gray-700 hover:opacity-80 text-sm"
+              onClick={handleToggleMode}
+              title="Ctrl+E"
+              className="px-3 py-1 rounded bg-gray-200 dark:bg-gray-700 hover:opacity-80 text-sm min-w-[80px]"
             >
               {isPreview ? 'Edit' : 'Preview'}
             </button>
@@ -67,12 +102,14 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, onClose, 
                 onSave(note.id, content);
                 onClose();
               }}
+              title="Ctrl+Enter"
               className="px-3 py-1 rounded bg-primary text-white hover:opacity-80 text-sm"
             >
-              Save
+              Save & Close
             </button>
              <button
               onClick={onClose}
+              title="Esc"
               className="px-3 py-1 rounded bg-gray-200 dark:bg-gray-700 hover:opacity-80 text-sm"
             >
               Close
@@ -83,7 +120,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, onClose, 
         <div className="flex-1 overflow-hidden relative">
             {isPreview ? (
                 <div 
-                    className="w-full h-full p-6 overflow-auto prose dark:prose-invert max-w-none"
+                    className="w-full h-full p-6 overflow-auto prose dark:prose-invert max-w-none custom-scrollbar select-text"
                     dangerouslySetInnerHTML={{ __html: parsedHtml }}
                 />
             ) : (
@@ -91,14 +128,16 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, onClose, 
                     ref={textareaRef}
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    className="w-full h-full p-6 bg-transparent resize-none outline-none font-mono text-base"
+                    className="w-full h-full p-6 bg-transparent resize-none outline-none font-mono text-base custom-scrollbar"
                     placeholder="Type markdown here..."
                 />
             )}
         </div>
         <div className="p-2 text-xs text-gray-500 border-t dark:border-gray-700 text-center">
-            Markdown Supported • Ctrl+Enter to Save • Esc to Cancel
+            {isPreview 
+                ? 'View Mode • Ctrl+E to Edit • Esc to Close' 
+                : 'Edit Mode • Ctrl+E to Save & Preview • Ctrl+Enter to Save & Close • Esc to Cancel'
+            }
         </div>
       </div>
     </div>

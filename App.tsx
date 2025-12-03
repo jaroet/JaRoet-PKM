@@ -550,6 +550,8 @@ function App() {
         </div>
     );
   };
+  
+  const labelStyle = "absolute -top-2.5 left-8 px-2 text-xs text-gray-400 dark:text-zinc-600 bg-gray-100 dark:bg-zinc-950 select-none z-20 pointer-events-none";
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground font-sans">
@@ -715,7 +717,8 @@ function App() {
                 {/* 1. Uppers (Top Row, Spanning) */}
                 {/* Changed rounded-lg to rounded-3xl and bg to white/zinc-900 */}
                 <div className="col-start-1 col-end-3 row-start-1 min-h-0 min-w-0 bg-white dark:bg-zinc-900 rounded-3xl shadow-sm border border-gray-200 dark:border-gray-800 relative">
-                    <div className="absolute inset-0 overflow-x-auto overflow-y-hidden">
+                    <div className={labelStyle}>Uppers</div>
+                    <div className="absolute inset-0 overflow-x-auto overflow-y-hidden custom-scrollbar">
                         {renderSection(
                             topology.uppers, 
                             'up', 
@@ -728,16 +731,18 @@ function App() {
 
                 {/* 2. Lefters (Left Col, Mid Row) */}
                 <div className="col-start-1 row-start-2 min-h-0 min-w-0 relative bg-white dark:bg-zinc-900 rounded-3xl shadow-sm border border-gray-200 dark:border-gray-800">
+                    <div className={labelStyle}>Lefters</div>
                     {renderSection(
                         topology.lefters, 
                         'left', 
-                        'absolute inset-0 flex flex-col gap-0 overflow-y-auto p-3',
+                        'absolute inset-0 flex flex-col gap-0 overflow-y-auto p-3 custom-scrollbar',
                         'w-full'
                     )}
                 </div>
 
                 {/* 3. CENTER STAGE (Center Col, Mid Row) */}
                 <div className="col-start-2 row-start-2 flex items-center justify-center p-4 z-10 relative min-h-0 min-w-0 bg-white dark:bg-zinc-900 rounded-3xl shadow-sm border border-gray-200 dark:border-gray-800">
+                     <div className={labelStyle}>Center</div>
                      {topology.center && (
                         renameValue !== null && focusedSection === 'center' ? (
                             <div className="flex items-center justify-center p-6 bg-card rounded-xl border-2 border-primary shadow-lg z-20">
@@ -768,18 +773,20 @@ function App() {
                 </div>
 
                 {/* 4. Righters (Right Col, Full Height) */}
-                <div className="col-start-3 row-start-1 row-span-3 min-h-0 min-w-0 bg-white dark:bg-zinc-900 rounded-3xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
+                <div className="col-start-3 row-start-1 row-span-3 min-h-0 min-w-0 bg-white dark:bg-zinc-900 rounded-3xl shadow-sm border border-gray-200 dark:border-gray-800 relative">
+                     <div className={labelStyle}>Righters</div>
                      {renderSection(
                         topology.righters, 
                         'right', 
-                        'flex flex-col gap-0 overflow-y-auto p-3 h-full', 
+                        'flex flex-col gap-0 overflow-y-auto p-3 h-full custom-scrollbar', 
                         'w-full'
                     )}
                 </div>
 
                 {/* 5. Downers (Bottom Row, Spanning) */}
                 <div className="col-start-1 col-end-3 row-start-3 min-h-0 min-w-0 bg-white dark:bg-zinc-900 rounded-3xl shadow-sm border border-gray-200 dark:border-gray-800 relative">
-                    <div className="absolute inset-0 overflow-x-auto overflow-y-hidden">
+                    <div className={labelStyle}>Downers</div>
+                    <div className="absolute inset-0 overflow-x-auto overflow-y-hidden custom-scrollbar">
                         {renderSection(
                             topology.downers, 
                             'down', 
