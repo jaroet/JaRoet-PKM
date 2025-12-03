@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NexusNode Data Generator</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f8fafc;
+            color: #0f172a;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            text-align: center;
+        }
+        .card {
+            background: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            max-width: 500px;
+            width: 90%;
+        }
+        h1 { margin-top: 0; color: #3b82f6; }
+        p { color: #64748b; margin-bottom: 2rem; }
+        button {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button:hover { background-color: #2563eb; }
+        button:disabled { background-color: #94a3b8; cursor: not-allowed; }
+        #status { margin-top: 1rem; font-size: 0.875rem; min-height: 1.5em; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Dataset Generator</h1>
+        <p>Generate a large JSON dataset (1,200+ notes) to stress test the NexusNode application. This creates a realistic graph with hierarchies and lateral connections.</p>
+        <button id="generateBtn">Generate & Download 1.2k Notes</button>
+        <div id="status"></div>
+    </div>
+
+    <script>
+        const CATEGORIES = ['Astronomy', 'Quantum Physics', 'History of Rome', 'Sourdough Baking', 'Machine Learning', 'Gardening', 'Philosophy', 'Web Development'];
+        const PREFIXES = ['Introduction to', 'Advanced', 'The paradox of', 'History of', 'Notes on', 'Analysis:', 'Project:', 'Thought:'];
+        const LOREM = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.";
+
+        function uuid() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        function randomInt(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        function randomItem(arr) {
+            return arr[Math.floor(Math.random() * arr.length)];
+        }
+
+        document.getElementById('generateBtn').addEventListener('click', async () => {
+            const btn = document.getElementById('generateBtn');
+            const status = document.getElementById('status');
+            
+            btn.disabled = true;
+            status.textContent = "Generating topology...";
+
+            // Use setTimeout to allow UI to update before heavy processing
+            setTimeout(() => {
+                const notes = [];
+                const now = Date.now();
+                
+                // 1. Create Root Hubs (The Categories)
+                const hubs = [];
+                CATEGORIES.forEach(cat => {
+                    const id = uuid();
+                    hubs.push({ id, title: cat });
+                    notes.push({
+                        id: id,
+                        title: cat,
+                        content: `# ${cat}\n\nThis is a main category hub.\n\n${LOREM}`,
+                        linksTo: [],
+                        relatedTo: [],
+                        isFavorite: true,
+                        createdAt: now,
+                        modifiedAt: now
+                    });
+                });
+
+                // 2. Create Sub-nodes
+                const TOTAL_NOTES = 1200;
+                const createdIds = [...hubs.map(h => h.id)];
+
+                for (let i = 0; i < TOTAL_NOTES; i++) {
+                    const id = uuid();
+                    createdIds.push(id);
+                    
+                    const hub = randomItem(hubs);
+                    const title = `${randomItem(PREFIXES)} ${hub.title} ${i}`;
+                    
+                    notes.push({
+                        id: id,
+                        title: title,
+                        content: `# ${title}\n\nParent Category: [[${hub.title}]]\n\n## Details\n${LOREM}\n${LOREM}\n\n## References\n- Reference A\n- Reference B`,
+                        linksTo: [],
+                        relatedTo: [],
+                        isFavorite: Math.random() < 0.02, // 2% chance of favorite
+                        createdAt: now - randomInt(0, 10000000),
+                        modifiedAt: now
+                    });
+                }
+
+                // 3. Create Topology (Links)
+                status.textContent = "Linking nodes...";
+                
+                notes.forEach(note => {
+                    const isHub = hubs.find(h => h.id === note.id);
+                    
+                    if (isHub) {
+                        // Hubs link to 20-50 random notes (Downers)
+                        const count = randomInt(20, 50);
+                        for(let i=0; i<count; i++) {
+                            const target = randomItem(createdIds);
+                            if(target !== note.id && !note.linksTo.includes(target)) {
+                                note.linksTo.push(target);
+                            }
+                        }
+                    } else {
+                        // Regular notes
+                        
+                        // 80% chance to link to a Hub (making the hub a Parent/Upper of this note)
+                        // Actually, in this data model, "linksTo" defines Downers.
+                        // So if we want Hub to be Parent (Upper), Hub must link TO this note.
+                        // We handled that above (Hubs link to random notes).
+                        
+                        // Let's make this note link TO other notes (create Downers for this note)
+                        const downerCount = randomInt(0, 3);
+                        for(let i=0; i<downerCount; i++) {
+                            const target = randomItem(createdIds);
+                            if(target !== note.id && !note.linksTo.includes(target)) {
+                                note.linksTo.push(target);
+                            }
+                        }
+
+                        // Lateral links (Lefters) - 30% chance
+                        if (Math.random() > 0.7) {
+                             const lefterCount = randomInt(1, 3);
+                             for(let i=0; i<lefterCount; i++) {
+                                const target = randomItem(createdIds);
+                                if(target !== note.id && !note.relatedTo.includes(target) && !note.linksTo.includes(target)) {
+                                    note.relatedTo.push(target);
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // 4. Download
+                const blob = new Blob([JSON.stringify(notes, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `nexusnode_large_dataset_${now}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                status.textContent = `Done! Generated ${notes.length} notes.`;
+                btn.disabled = false;
+            }, 100);
+        });
+    </script>
+</body>
+</html>
