@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { db, getTopology, createNote, updateNote, getFavorites, toggleFavorite, seedDatabase, getNote, getAllNotes, importNotes, getHomeNoteId, searchNotes, getFontSize, getNoteCount, getVaultList, getCurrentVaultName, switchVault } from './services/db';
+import { db, getTopology, createNote, updateNote, deleteNote, getFavorites, toggleFavorite, seedDatabase, getNote, getAllNotes, importNotes, getHomeNoteId, searchNotes, getFontSize, getNoteCount, getVaultList, getCurrentVaultName, switchVault } from './services/db';
 import { Note, Section, Topology, SearchResult } from './types';
 import NoteCard from './components/NoteCard';
 import LinkerModal from './components/LinkerModal';
 import MarkdownEditor from './components/MarkdownEditor';
 import SettingsModal from './components/SettingsModal';
+import RenameModal from './components/RenameModal';
 
 function App() {
   // --- State ---
@@ -40,13 +41,14 @@ function App() {
   
   const [linkerOpen, setLinkerOpen] = useState(false);
   const [linkerType, setLinkerType] = useState<'up' | 'down' | 'left'>('up');
-  const [renameValue, setRenameValue] = useState<string | null>(null); // If not null, we are renaming
+  
+  const [renameModalOpen, setRenameModalOpen] = useState(false);
+  const [noteToRename, setNoteToRename] = useState<Note | null>(null);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchResultsRef = useRef<HTMLDivElement>(null);
-  const renameInputRef = useRef<HTMLInputElement>(null);
   const mainContainerRef = useRef<HTMLDivElement>(null);
 
   // --- Initialization ---
@@ -161,7 +163,7 @@ function App() {
   };
 
   // --- Derived State for Active Note ---
-  const getSortedNotes = (section: Section): Note[] => {
+  const getSortedNotes = useCallback((section: Section): Note[] => {
       let notes: Note[] = [];
       if (section === 'center') return topology.center ? [topology.center] : [];
       if (section === 'up') notes = topology.uppers;
@@ -170,13 +172,33 @@ function App() {
       if (section === 'right') notes = topology.righters;
       
       return [...notes].sort((a, b) => a.title.localeCompare(b.title));
-  };
+  }, [topology]);
 
-  const getFocusedNote = (): Note | null => {
+  const getFocusedNote = useCallback((): Note | null => {
     if (focusedSection === 'center') return topology.center;
     const notes = getSortedNotes(focusedSection);
-    return notes[focusedIndex] || notes[0] || null;
-  };
+    return notes[focusedIndex] || null;
+  }, [focusedSection, focusedIndex, getSortedNotes, topology]);
+
+  // --- Focus Integrity (Clamping) ---
+  // If notes are deleted or list shrinks, clamp focus index to stay valid
+  useEffect(() => {
+    if (focusedSection === 'center') return;
+    
+    const notes = getSortedNotes(focusedSection);
+    // If section is empty but we are focused on it, move to center
+    if (notes.length === 0) {
+        setFocusedSection('center');
+        setFocusedIndex(0);
+        return;
+    }
+    
+    // If index is out of bounds, clamp it
+    if (focusedIndex >= notes.length) {
+        setFocusedIndex(notes.length - 1);
+    }
+  }, [topology, focusedSection, focusedIndex, getSortedNotes]);
+
 
   // --- Actions ---
 
@@ -190,19 +212,68 @@ function App() {
   };
 
   const handleRename = async (newTitle: string) => {
-    const note = getFocusedNote();
-    if (note) {
-      await updateNote(note.id, { title: newTitle });
-      setRenameValue(null);
+    if (noteToRename) {
+      await updateNote(noteToRename.id, { title: newTitle });
+      setNoteToRename(null);
       loadTopology(centralNoteId!);
       refreshFavorites();
     }
   };
 
+  const handleStartRename = () => {
+    const note = getFocusedNote();
+    if (note) {
+        setNoteToRename(note);
+        setRenameModalOpen(true);
+    }
+  };
+
+  const handleOpenEditor = () => {
+    const note = getFocusedNote();
+    if (note) setEditorOpen(true);
+  };
+
+  const handleDeleteFocusedNote = async () => {
+    const note = getFocusedNote();
+    if (note) {
+        // Basic confirmation for mouse click actions, though keyboard shortcut bypasses it for speed
+        if (window.confirm(`Are you sure you want to delete "${note.title}"?`)) {
+             await performDelete(note);
+        }
+    }
+  };
+  
+  const performDelete = async (note: Note) => {
+        await deleteNote(note.id);
+        
+        // If we deleted the central note, we must navigate away
+        if (note.id === centralNoteId) {
+            goHome(); // This will fallback to first available if home is gone
+        } else {
+            // We deleted a peripheral note, just refresh topology
+            // Focus clamping useEffect will handle UI focus update
+            if (centralNoteId) loadTopology(centralNoteId);
+        }
+        updateTotalCount();
+  };
+
   const goHome = async () => {
     const homeId = await getHomeNoteId();
     if (homeId) {
-        setCentralNoteId(homeId);
+        // Verify existence
+        const exists = await getNote(homeId);
+        if (exists) {
+            setCentralNoteId(homeId);
+        } else {
+            // Home note was deleted
+            const all = await getAllNotes();
+            if (all.length > 0) {
+                 setCentralNoteId(all[0].id);
+            } else {
+                 const newId = await seedDatabase();
+                 if (newId) setCentralNoteId(newId);
+            }
+        }
     } else {
         setSettingsOpen(true);
     }
@@ -232,9 +303,18 @@ function App() {
             await updateNote(centralNoteId, { linksTo: [...center.linksTo, targetNoteId] });
         }
     } else if (linkerType === 'left') {
+        // Bi-directional linking for Lateral (Related) nodes
         const center = topology.center;
+        
+        // 1. Add Target to Center
         if (center && !center.relatedTo.includes(targetNoteId)) {
             await updateNote(centralNoteId, { relatedTo: [...center.relatedTo, targetNoteId] });
+        }
+
+        // 2. Add Center to Target
+        const target = await getNote(targetNoteId);
+        if (target && !target.relatedTo.includes(centralNoteId)) {
+            await updateNote(targetNoteId, { relatedTo: [...target.relatedTo, centralNoteId] });
         }
     }
 
@@ -307,7 +387,7 @@ function App() {
   // --- Keyboard Handling ---
 
   const handleGlobalKeyDown = useCallback(async (e: React.KeyboardEvent | KeyboardEvent) => {
-    if (renameValue !== null || isSearchActive || editorOpen || linkerOpen || settingsOpen) return;
+    if (renameModalOpen || isSearchActive || editorOpen || linkerOpen || settingsOpen) return;
 
     if (e.key === '/') {
       e.preventDefault();
@@ -316,6 +396,18 @@ function App() {
       return;
     }
 
+    // Completely Delete Note
+    if (e.ctrlKey && e.key === 'Backspace') {
+        const note = getFocusedNote();
+        if (note) {
+            e.preventDefault();
+            // Shortcut deletion (no confirm)
+            await performDelete(note);
+        }
+        return;
+    }
+
+    // Unlink Note (Standard Backspace)
     if (e.key === 'Backspace') {
       const note = getFocusedNote();
       if (note && centralNoteId && focusedSection !== 'center' && focusedSection !== 'right') {
@@ -330,9 +422,16 @@ function App() {
                 await updateNote(centralNoteId, { linksTo: newLinks });
             }
         } else if (focusedSection === 'left') {
+            // Remove Note from Center
             if (topology.center) {
                 const newRelated = topology.center.relatedTo.filter(id => id !== note.id);
                 await updateNote(centralNoteId, { relatedTo: newRelated });
+            }
+            // Remove Center from Note (Bidirectional cleanup)
+            const noteData = await getNote(note.id);
+            if (noteData) {
+                 const newRelated = noteData.relatedTo.filter(id => id !== centralNoteId);
+                 await updateNote(note.id, { relatedTo: newRelated });
             }
         }
         loadTopology(centralNoteId);
@@ -363,11 +462,7 @@ function App() {
 
     if (e.key === 'F2') {
         e.preventDefault();
-        const note = getFocusedNote();
-        if (note) {
-            setRenameValue(note.title);
-            setTimeout(() => renameInputRef.current?.focus(), 50);
-        }
+        handleStartRename();
         return;
     }
 
@@ -379,8 +474,7 @@ function App() {
 
     if (e.shiftKey && e.key === 'Enter') {
         e.preventDefault();
-        const note = getFocusedNote();
-        if (note) setEditorOpen(true);
+        handleOpenEditor();
         return;
     }
 
@@ -401,7 +495,6 @@ function App() {
         if (!container) return 1;
 
         // Get all note card children
-        // Filter direct children that are likely notes (based on ID convention)
         const cards = Array.from(container.children).filter(c => c.id.startsWith('note-'));
         
         if (cards.length < 2) return 1;
@@ -410,7 +503,6 @@ function App() {
         const firstLeft = (cards[0] as HTMLElement).offsetLeft;
         
         // Iterate until we find a card that has a significantly different 'left' position
-        // This signifies the start of Column 2
         for (let i = 1; i < cards.length; i++) {
             const currentLeft = (cards[i] as HTMLElement).offsetLeft;
             // Using a tolerance (e.g., 20px) to account for minor sub-pixel rendering or borders
@@ -513,7 +605,7 @@ function App() {
         }
     }
 
-  }, [focusedSection, focusedIndex, topology, centralNoteId, renameValue, isSearchActive, editorOpen, linkerOpen, settingsOpen, fontSize, sectionIndices]);
+  }, [focusedSection, focusedIndex, topology, centralNoteId, renameModalOpen, isSearchActive, editorOpen, linkerOpen, settingsOpen, fontSize, sectionIndices, getFocusedNote, getSortedNotes]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleGlobalKeyDown as any);
@@ -593,21 +685,12 @@ function App() {
                     )}
                 </div>
 
-                {/* Favorite Toggle for Current Note */}
-                <button 
-                    title="Toggle Favorite for current note"
-                    onClick={handleFavoriteToggle} 
-                    className={`p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 ${getFocusedNote()?.isFavorite ? 'text-yellow-500' : 'text-gray-400'}`}
-                >
-                    {getFocusedNote()?.isFavorite ? '★' : '☆'}
-                </button>
-
                 <button onClick={goHome} title="Go Home" className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
                     🏠
                 </button>
             </div>
 
-            {/* Center: Search - Removed max-w-lg to fill space */}
+            {/* Center: Search */}
             <div className="relative flex-1">
                 <input 
                     ref={searchInputRef}
@@ -656,6 +739,39 @@ function App() {
 
             {/* Right Group: Tools */}
             <div className="flex items-center gap-2">
+                {/* Note Actions */}
+                <button 
+                    title="Toggle Favorite (Current Note)"
+                    onClick={handleFavoriteToggle} 
+                    className={`p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 ${getFocusedNote()?.isFavorite ? 'text-yellow-500' : 'text-gray-400'}`}
+                >
+                    {getFocusedNote()?.isFavorite ? '★' : '☆'}
+                </button>
+                <button 
+                    onClick={handleOpenEditor} 
+                    title="View Content (Shift+Enter)" 
+                    className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 hover:text-primary"
+                >
+                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                </button>
+                <button 
+                    onClick={handleStartRename} 
+                    title="Rename Note (F2)" 
+                    className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 hover:text-primary"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                </button>
+                <button 
+                    onClick={handleDeleteFocusedNote} 
+                    title="Delete Note (Ctrl+Backspace)" 
+                    className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 hover:text-red-500"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                </button>
+
+                <div className="h-6 w-px bg-gray-300 dark:bg-gray-700 mx-2"></div>
+
+                {/* App Tools */}
                 <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
                     {isDarkMode ? '☀' : '☾'}
                 </button>
@@ -744,31 +860,13 @@ function App() {
                 <div className="col-start-2 row-start-2 flex items-center justify-center p-4 z-10 relative min-h-0 min-w-0 bg-white dark:bg-zinc-900 rounded-3xl shadow-sm border border-gray-200 dark:border-gray-800">
                      <div className={labelStyle}>Center</div>
                      {topology.center && (
-                        renameValue !== null && focusedSection === 'center' ? (
-                            <div className="flex items-center justify-center p-6 bg-card rounded-xl border-2 border-primary shadow-lg z-20">
-                                <input
-                                    ref={renameInputRef}
-                                    type="text"
-                                    value={renameValue}
-                                    onChange={e => setRenameValue(e.target.value)}
-                                    onKeyDown={e => {
-                                        if (e.key === 'Enter') handleRename(renameValue);
-                                        if (e.key === 'Escape') setRenameValue(null);
-                                    }}
-                                    onBlur={() => setRenameValue(null)}
-                                    style={{ fontSize: `${fontSize * 1.5}px` }}
-                                    className="min-w-[300px] text-center bg-transparent font-bold outline-none text-foreground"
-                                />
-                            </div>
-                        ) : (
-                            <NoteCard
-                                note={topology.center}
-                                fontSize={fontSize}
-                                isFocused={focusedSection === 'center'}
-                                isCenter={true}
-                                onClick={() => {}}
-                            />
-                        )
+                        <NoteCard
+                            note={topology.center}
+                            fontSize={fontSize}
+                            isFocused={focusedSection === 'center'}
+                            isCenter={true}
+                            onClick={() => {}}
+                        />
                      )}
                 </div>
 
@@ -828,6 +926,12 @@ function App() {
             updateNote(id, { content });
             loadTopology(centralNoteId!);
         }}
+      />
+      <RenameModal
+        isOpen={renameModalOpen}
+        currentTitle={noteToRename?.title || ''}
+        onClose={() => setRenameModalOpen(false)}
+        onRename={handleRename}
       />
       <SettingsModal
         isOpen={settingsOpen}

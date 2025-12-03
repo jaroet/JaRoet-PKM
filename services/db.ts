@@ -100,7 +100,7 @@ export const seedDatabase = async () => {
     const now = Date.now();
     const n1 = {
       id: crypto.randomUUID(),
-      title: 'Welcome to NexusNode',
+      title: 'Welcome to JaRoet PKM',
       content: '# Welcome\n\nThis is your Central Note. Use arrow keys to navigate.',
       linksTo: [],
       relatedTo: [],
@@ -108,33 +108,8 @@ export const seedDatabase = async () => {
       createdAt: now,
       modifiedAt: now,
     };
-    const n2 = {
-      id: crypto.randomUUID(),
-      title: 'Navigation Help',
-      content: 'Use arrow keys to move. Shift+Enter to edit.',
-      linksTo: [],
-      relatedTo: [],
-      isFavorite: false,
-      createdAt: now,
-      modifiedAt: now,
-    };
-    const n3 = {
-      id: crypto.randomUUID(),
-      title: 'Concepts',
-      content: 'Links define the structure.',
-      linksTo: [],
-      relatedTo: [],
-      isFavorite: false,
-      createdAt: now,
-      modifiedAt: now,
-    };
-
-    // Link N1 -> N2 (Downer)
-    n1.linksTo.push(n2.id);
-    // Link N1 -> N3 (Lefter)
-    n1.relatedTo.push(n3.id);
-
-    await db.notes.bulkAdd([n1, n2, n3]);
+    
+    await db.notes.bulkAdd([n1]);
     await db.meta.put({ key: 'currentCentralNoteId', value: n1.id });
     await db.meta.put({ key: 'favoritesList', value: [] });
     // Default home note
@@ -168,6 +143,32 @@ export const createNote = async (title: string): Promise<Note> => {
 
 export const updateNote = async (id: string, updates: Partial<Note>) => {
   await db.notes.update(id, { ...updates, modifiedAt: Date.now() });
+};
+
+export const deleteNote = async (id: string) => {
+    await (db as any).transaction('rw', db.notes, db.meta, async () => {
+        // 1. Delete the note itself
+        await db.notes.delete(id);
+
+        // 2. Remove references from linksTo (Parent relationships)
+        await db.notes.where('linksTo').equals(id).modify((note: Note) => {
+            note.linksTo = note.linksTo.filter(linkId => linkId !== id);
+            note.modifiedAt = Date.now();
+        });
+
+        // 3. Remove references from relatedTo (Lateral relationships)
+        await db.notes.where('relatedTo').equals(id).modify((note: Note) => {
+            note.relatedTo = note.relatedTo.filter(linkId => linkId !== id);
+            note.modifiedAt = Date.now();
+        });
+
+        // 4. Remove from favorites list in Meta
+        const favsMeta = await db.meta.get('favoritesList');
+        if (favsMeta && favsMeta.value.includes(id)) {
+            const newFavs = favsMeta.value.filter((favId: string) => favId !== id);
+            await db.meta.put({ key: 'favoritesList', value: newFavs });
+        }
+    });
 };
 
 export const getNoteCount = async (): Promise<number> => {
