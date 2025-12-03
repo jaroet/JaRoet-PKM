@@ -5,7 +5,7 @@ import { Note, Topology, SearchResult } from '../types';
 
 const VAULT_LIST_KEY = 'nexusnode_vaults';
 const CURRENT_VAULT_KEY = 'nexusnode_current_vault';
-const DEFAULT_VAULT = 'NexusNodeDB';
+const DEFAULT_VAULT = 'JaRoet-PKM';
 
 // Initialize Vault configuration if missing
 if (!localStorage.getItem(VAULT_LIST_KEY)) {
@@ -267,6 +267,47 @@ export const getFontSize = async (): Promise<number> => {
 
 export const setFontSize = async (size: number) => {
     await db.meta.put({ key: 'fontSize', value: size });
+};
+
+// --- App Settings (Theming) ---
+
+export interface ThemeConfig {
+    background: string; // Gutter
+    section: string;    // Section Boxes
+    accent: string;     // Icons / Highlights
+    bars: string;       // Top/Status Bars
+}
+
+export interface AppTheme {
+    light: ThemeConfig;
+    dark: ThemeConfig;
+}
+
+const DEFAULT_THEME: AppTheme = {
+    light: {
+        background: '#f1f5f9', // slate-100
+        section: '#ffffff',    // white
+        accent: '#3b82f6',     // blue-500
+        bars: '#e2e8f0'        // slate-200
+    },
+    dark: {
+        background: '#1e293b', // slate-800
+        section: '#0f172a',    // slate-900
+        accent: '#60a5fa',     // blue-400
+        bars: '#0f172a'        // slate-900
+    }
+};
+
+export const getAppTheme = async (): Promise<AppTheme> => {
+    const meta = await db.meta.get('appTheme');
+    if (meta && meta.value) {
+        return meta.value;
+    }
+    return DEFAULT_THEME;
+};
+
+export const setAppTheme = async (theme: AppTheme) => {
+    await db.meta.put({ key: 'appTheme', value: theme });
 };
 
 // --- Search ---

@@ -9,7 +9,10 @@ import {
     getCurrentVaultName,
     createVault,
     deleteCurrentVault,
-    resetCurrentVault
+    resetCurrentVault,
+    getAppTheme,
+    setAppTheme,
+    AppTheme
 } from '../services/db';
 
 interface SettingsModalProps {
@@ -18,14 +21,18 @@ interface SettingsModalProps {
   currentCentralNoteId: string | null;
   fontSize: number;
   onFontSizeChange: (size: number) => void;
+  onThemeChange: () => void;
 }
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, currentCentralNoteId, fontSize, onFontSizeChange }) => {
-  const [activeTab, setActiveTab] = useState<'general' | 'database'>('general');
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, currentCentralNoteId, fontSize, onFontSizeChange, onThemeChange }) => {
+  const [activeTab, setActiveTab] = useState<'general' | 'theme' | 'database'>('general');
+  const [themeMode, setThemeMode] = useState<'light' | 'dark'>('dark');
   const [homeNoteTitle, setHomeNoteTitle] = useState('Loading...');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [localFontSize, setLocalFontSize] = useState(fontSize);
+  
+  const [appTheme, setLocalAppTheme] = useState<AppTheme | null>(null);
   
   // Vault Management State
   const [newVaultName, setNewVaultName] = useState('');
@@ -36,6 +43,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, currentC
   useEffect(() => {
     if (isOpen) {
       loadHomeNote();
+      loadTheme();
       setSearchQuery('');
       setSearchResults([]);
       setLocalFontSize(fontSize);
@@ -48,6 +56,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, currentC
       setActiveTab('general'); // Reset to general tab on open
     }
   }, [isOpen, fontSize]);
+
+  const loadTheme = async () => {
+      const t = await getAppTheme();
+      setLocalAppTheme(t);
+  };
 
   const loadHomeNote = async () => {
     const id = await getHomeNoteId();
@@ -90,6 +103,20 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, currentC
       setLocalFontSize(size);
       onFontSizeChange(size);
       await dbSetFontSize(size);
+  };
+  
+  const handleThemeUpdate = async (key: keyof AppTheme['light'], value: string) => {
+      if (!appTheme) return;
+      const newTheme = {
+          ...appTheme,
+          [themeMode]: {
+              ...appTheme[themeMode],
+              [key]: value
+          }
+      };
+      setLocalAppTheme(newTheme);
+      await setAppTheme(newTheme);
+      onThemeChange();
   };
 
   const handleCreateVault = () => {
@@ -136,6 +163,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, currentC
                 onClick={() => setActiveTab('general')}
             >
                 General
+            </button>
+            <button
+                className={`py-2 px-4 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === 'theme' 
+                    ? 'border-primary text-primary' 
+                    : 'border-transparent text-gray-500 hover:text-foreground'
+                }`}
+                onClick={() => setActiveTab('theme')}
+            >
+                Theme
             </button>
             <button
                 className={`py-2 px-4 text-sm font-medium border-b-2 transition-colors ${
@@ -207,6 +244,84 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, currentC
                                     ))}
                                 </div>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'theme' && appTheme && (
+                <div className="space-y-6">
+                    {/* Theme Mode Toggle */}
+                    <div className="flex justify-center p-1 bg-gray-100 dark:bg-gray-800 rounded-lg mb-6">
+                        <button
+                            className={`flex-1 py-1 text-sm font-medium rounded-md transition-all ${
+                                themeMode === 'light' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-300'
+                            }`}
+                            onClick={() => setThemeMode('light')}
+                        >
+                            Light Mode
+                        </button>
+                        <button
+                            className={`flex-1 py-1 text-sm font-medium rounded-md transition-all ${
+                                themeMode === 'dark' ? 'bg-gray-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-300'
+                            }`}
+                            onClick={() => setThemeMode('dark')}
+                        >
+                            Dark Mode
+                        </button>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <div className="flex flex-col">
+                                <span className="font-medium text-sm">Background Color</span>
+                                <span className="text-xs text-gray-500">The gutters/canvas background</span>
+                            </div>
+                            <input 
+                                type="color" 
+                                value={appTheme[themeMode].background}
+                                onChange={e => handleThemeUpdate('background', e.target.value)}
+                                className="h-8 w-14 p-0 border-0 rounded cursor-pointer"
+                            />
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                            <div className="flex flex-col">
+                                <span className="font-medium text-sm">Section Color</span>
+                                <span className="text-xs text-gray-500">Background for note containers</span>
+                            </div>
+                            <input 
+                                type="color" 
+                                value={appTheme[themeMode].section}
+                                onChange={e => handleThemeUpdate('section', e.target.value)}
+                                className="h-8 w-14 p-0 border-0 rounded cursor-pointer"
+                            />
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                            <div className="flex flex-col">
+                                <span className="font-medium text-sm">Bars Background</span>
+                                <span className="text-xs text-gray-500">Top bar and status bar</span>
+                            </div>
+                            <input 
+                                type="color" 
+                                value={appTheme[themeMode].bars}
+                                onChange={e => handleThemeUpdate('bars', e.target.value)}
+                                className="h-8 w-14 p-0 border-0 rounded cursor-pointer"
+                            />
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                            <div className="flex flex-col">
+                                <span className="font-medium text-sm">Accent Color</span>
+                                <span className="text-xs text-gray-500">Icons and active elements</span>
+                            </div>
+                            <input 
+                                type="color" 
+                                value={appTheme[themeMode].accent}
+                                onChange={e => handleThemeUpdate('accent', e.target.value)}
+                                className="h-8 w-14 p-0 border-0 rounded cursor-pointer"
+                            />
                         </div>
                     </div>
                 </div>

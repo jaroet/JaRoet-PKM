@@ -15,6 +15,8 @@ const LinkerModal: React.FC<LinkerModalProps> = ({ isOpen, type, onClose, onSele
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const isBulk = query.includes(';');
+
   useEffect(() => {
     if (isOpen) {
       setQuery('');
@@ -26,7 +28,7 @@ const LinkerModal: React.FC<LinkerModalProps> = ({ isOpen, type, onClose, onSele
 
   useEffect(() => {
     const fetch = async () => {
-      if (query.trim()) {
+      if (query.trim() && !isBulk) {
         const res = await searchNotes(query);
         setResults(res);
       } else {
@@ -35,24 +37,34 @@ const LinkerModal: React.FC<LinkerModalProps> = ({ isOpen, type, onClose, onSele
     };
     const debounce = setTimeout(fetch, 200);
     return () => clearTimeout(debounce);
-  }, [query]);
+  }, [query, isBulk]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setSelectedIndex(prev => (prev + 1) % (results.length + 1)); // +1 for "Create New"
+      if (!isBulk) {
+        setSelectedIndex(prev => (prev + 1) % (results.length + 1)); // +1 for "Create New"
+      }
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setSelectedIndex(prev => (prev - 1 + (results.length + 1)) % (results.length + 1));
+      if (!isBulk) {
+        setSelectedIndex(prev => (prev - 1 + (results.length + 1)) % (results.length + 1));
+      }
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      if (selectedIndex < results.length) {
-        // Existing note
-        onSelect(results[selectedIndex].id);
-      } else {
-        // Create new
+      if (isBulk) {
         if (query.trim()) {
-          onSelect(null, query);
+            onSelect(null, query);
+        }
+      } else {
+        if (selectedIndex < results.length) {
+            // Existing note
+            onSelect(results[selectedIndex].id);
+        } else {
+            // Create new
+            if (query.trim()) {
+            onSelect(null, query);
+            }
         }
       }
       onClose();
@@ -64,15 +76,18 @@ const LinkerModal: React.FC<LinkerModalProps> = ({ isOpen, type, onClose, onSele
   if (!isOpen) return null;
 
   const titles = {
-    up: 'Link Parent (Upper)',
-    down: 'Link Child (Downer)',
-    left: 'Link Related (Lefter)',
+    up: 'Link Parent',
+    down: 'Link Child',
+    left: 'Link Related',
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className="w-full max-w-md bg-background rounded-xl shadow-2xl border border-gray-200 dark:border-gray-800 p-4">
         <h3 className="text-lg font-semibold mb-2">{titles[type]}</h3>
+        <p className="text-xs text-gray-500 mb-3">
+            Use <b>;</b> to separate multiple items (e.g. "Apple; Banana; Orange") for bulk creation.
+        </p>
         <input
           ref={inputRef}
           type="text"
@@ -83,32 +98,46 @@ const LinkerModal: React.FC<LinkerModalProps> = ({ isOpen, type, onClose, onSele
           onKeyDown={handleKeyDown}
         />
         <div className="mt-2 max-h-60 overflow-y-auto border-t border-gray-100 dark:border-gray-800 pt-2">
-          {results.map((res, idx) => (
-            <div
-              key={res.id}
-              className={`p-2 rounded cursor-pointer ${
-                idx === selectedIndex ? 'bg-primary text-primary-foreground' : 'hover:bg-gray-100 dark:hover:bg-gray-800'
-              }`}
-              onClick={() => {
-                onSelect(res.id);
-                onClose();
-              }}
+          {isBulk ? (
+             <div
+                className="p-2 rounded cursor-pointer flex items-center gap-2 bg-primary text-primary-foreground"
+                onClick={() => {
+                    onSelect(null, query);
+                    onClose();
+                }}
             >
-              {res.title}
+                <span className="font-bold">+</span> Bulk Create {query.split(';').filter(s => s.trim()).length} Notes
             </div>
-          ))}
-          {query.trim() && (
-            <div
-              className={`p-2 rounded cursor-pointer flex items-center gap-2 ${
-                selectedIndex === results.length ? 'bg-primary text-primary-foreground' : 'hover:bg-gray-100 dark:hover:bg-gray-800'
-              }`}
-              onClick={() => {
-                onSelect(null, query);
-                onClose();
-              }}
-            >
-              <span className="font-bold">+</span> Create "{query}"
-            </div>
+          ) : (
+            <>
+                {results.map((res, idx) => (
+                    <div
+                    key={res.id}
+                    className={`p-2 rounded cursor-pointer ${
+                        idx === selectedIndex ? 'bg-primary text-primary-foreground' : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+                    }`}
+                    onClick={() => {
+                        onSelect(res.id);
+                        onClose();
+                    }}
+                    >
+                    {res.title}
+                    </div>
+                ))}
+                {query.trim() && (
+                    <div
+                    className={`p-2 rounded cursor-pointer flex items-center gap-2 ${
+                        selectedIndex === results.length ? 'bg-primary text-primary-foreground' : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+                    }`}
+                    onClick={() => {
+                        onSelect(null, query);
+                        onClose();
+                    }}
+                    >
+                    <span className="font-bold">+</span> Create "{query}"
+                    </div>
+                )}
+            </>
           )}
         </div>
       </div>

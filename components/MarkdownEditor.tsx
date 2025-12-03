@@ -12,17 +12,28 @@ interface MarkdownEditorProps {
 const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, onClose, onSave }) => {
   const [content, setContent] = useState('');
   const [parsedHtml, setParsedHtml] = useState('');
-  const [isPreview, setIsPreview] = useState(true); // Default to View Mode
+  const [isPreview, setIsPreview] = useState(true); // Default
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
 
   // Initialize state when modal opens
   useEffect(() => {
     if (note && isOpen) {
+      const hasContent = note.content && note.content.trim().length > 0;
       setContent(note.content || '');
-      setIsPreview(true);
-      // Focus container to capture key events in view mode
-      setTimeout(() => containerRef.current?.focus(), 100);
+      
+      // Show preview if content exists, otherwise edit mode
+      setIsPreview(hasContent);
+      
+      // Focus appropriate element
+      setTimeout(() => {
+          if (hasContent) {
+              previewRef.current?.focus();
+          } else {
+              textareaRef.current?.focus();
+          }
+      }, 100);
     }
   }, [note, isOpen]);
 
@@ -50,7 +61,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, onClose, 
           // Switch to View Mode -> Save Content
           if (note) onSave(note.id, content);
           setIsPreview(true);
-          setTimeout(() => containerRef.current?.focus(), 50);
+          setTimeout(() => previewRef.current?.focus(), 50);
       }
   };
 
@@ -83,7 +94,8 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, onClose, 
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div 
         ref={containerRef}
-        tabIndex={0} // Allow div to receive focus
+        // Use -1 so it doesn't trap tab focus but can catch bubbles
+        tabIndex={-1} 
         onKeyDown={handleKeyDown}
         className="w-full max-w-4xl h-[80vh] bg-background rounded-lg shadow-2xl flex flex-col border border-gray-200 dark:border-gray-800 outline-none"
       >
@@ -120,7 +132,9 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, onClose, 
         <div className="flex-1 overflow-hidden relative">
             {isPreview ? (
                 <div 
-                    className="w-full h-full p-6 overflow-auto prose dark:prose-invert max-w-none custom-scrollbar select-text"
+                    ref={previewRef}
+                    tabIndex={0}
+                    className="w-full h-full p-6 overflow-auto prose dark:prose-invert max-w-none custom-scrollbar select-text outline-none"
                     dangerouslySetInnerHTML={{ __html: parsedHtml }}
                 />
             ) : (

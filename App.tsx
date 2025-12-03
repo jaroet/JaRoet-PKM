@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { db, getTopology, createNote, updateNote, deleteNote, getFavorites, toggleFavorite, seedDatabase, getNote, getAllNotes, importNotes, getHomeNoteId, searchNotes, getFontSize, getNoteCount, getVaultList, getCurrentVaultName, switchVault } from './services/db';
+import { db, getTopology, createNote, updateNote, deleteNote, getFavorites, toggleFavorite, seedDatabase, getNote, getAllNotes, importNotes, getHomeNoteId, searchNotes, getFontSize, getNoteCount, getVaultList, getCurrentVaultName, switchVault, getAppTheme, AppTheme } from './services/db';
 import { Note, Section, Topology, SearchResult } from './types';
 import NoteCard from './components/NoteCard';
 import LinkerModal from './components/LinkerModal';
@@ -21,6 +21,8 @@ function App() {
   // Default Dark Mode = true
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [fontSize, setFontSize] = useState(16);
+  // Force update trigger for theme changes
+  const [themeTick, setThemeTick] = useState(0);
   const [totalNoteCount, setTotalNoteCount] = useState(0);
   
   // Navigation State
@@ -30,8 +32,9 @@ function App() {
   const [sectionIndices, setSectionIndices] = useState({ up: 0, down: 0, left: 0, right: 0 });
 
   // Modals & UI State
+  const [showMainMenu, setShowMainMenu] = useState(false);
   const [showFavDropdown, setShowFavDropdown] = useState(false);
-  const [showVaultDropdown, setShowVaultDropdown] = useState(false);
+  const [showVaultListInMenu, setShowVaultListInMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [activeSearchIndex, setActiveSearchIndex] = useState(0); // For keyboard nav in search
@@ -84,6 +87,37 @@ function App() {
       document.documentElement.classList.remove('dark');
     }
   }, [isDarkMode]);
+
+  // Apply Theme Color via CSS Variables
+  useEffect(() => {
+    const applyTheme = async () => {
+        const theme: AppTheme = await getAppTheme();
+        const styleId = 'dynamic-theme-styles';
+        let styleTag = document.getElementById(styleId);
+        if (!styleTag) {
+          styleTag = document.createElement('style');
+          styleTag.id = styleId;
+          document.head.appendChild(styleTag);
+        }
+        styleTag.innerHTML = `
+          :root {
+            --theme-bg: ${theme.light.background};
+            --theme-section: ${theme.light.section};
+            --theme-bars: ${theme.light.bars};
+            --theme-accent: ${theme.light.accent};
+            --primary: ${theme.light.accent};
+          }
+          .dark {
+            --theme-bg: ${theme.dark.background};
+            --theme-section: ${theme.dark.section};
+            --theme-bars: ${theme.dark.bars};
+            --theme-accent: ${theme.dark.accent};
+            --primary: ${theme.dark.accent};
+          }
+        `;
+    };
+    applyTheme();
+  }, [themeTick]);
 
   useEffect(() => {
     if (centralNoteId) {
@@ -233,16 +267,6 @@ function App() {
     if (note) setEditorOpen(true);
   };
 
-  const handleDeleteFocusedNote = async () => {
-    const note = getFocusedNote();
-    if (note) {
-        // Basic confirmation for mouse click actions, though keyboard shortcut bypasses it for speed
-        if (window.confirm(`Are you sure you want to delete "${note.title}"?`)) {
-             await performDelete(note);
-        }
-    }
-  };
-  
   const performDelete = async (note: Note) => {
         await deleteNote(note.id);
         
@@ -255,6 +279,15 @@ function App() {
             if (centralNoteId) loadTopology(centralNoteId);
         }
         updateTotalCount();
+  };
+
+  const handleDeleteFocusedNote = async (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
+    const note = getFocusedNote();
+    if (note) {
+        // No confirmation needed to match CTRL-backspace behavior
+        await performDelete(note);
+    }
   };
 
   const goHome = async () => {
@@ -282,40 +315,49 @@ function App() {
   const handleLinkerSelect = async (targetId: string | null, newTitle?: string) => {
     if (!centralNoteId) return;
     
-    let targetNoteId = targetId;
+    // Helper function to perform the linking logic
+    const linkToTarget = async (id: string) => {
+        if (linkerType === 'up') {
+            const target = await getNote(id);
+            if (target && !target.linksTo.includes(centralNoteId)) {
+                await updateNote(id, { linksTo: [...target.linksTo, centralNoteId] });
+            }
+        } else if (linkerType === 'down') {
+            const center = await getNote(centralNoteId); // Refresh center from DB
+            if (center && !center.linksTo.includes(id)) {
+                await updateNote(centralNoteId, { linksTo: [...center.linksTo, id] });
+            }
+        } else if (linkerType === 'left') {
+            // Bi-directional linking for Lateral (Related) nodes
+            const center = await getNote(centralNoteId);
+            
+            // 1. Add Target to Center
+            if (center && !center.relatedTo.includes(id)) {
+                await updateNote(centralNoteId, { relatedTo: [...center.relatedTo, id] });
+            }
     
-    // Create new note if needed
-    if (!targetNoteId && newTitle) {
-      const newNote = await createNote(newTitle);
-      targetNoteId = newNote.id;
-    }
+            // 2. Add Center to Target
+            const target = await getNote(id);
+            if (target && !target.relatedTo.includes(centralNoteId)) {
+                await updateNote(id, { relatedTo: [...target.relatedTo, centralNoteId] });
+            }
+        }
+    };
 
-    if (!targetNoteId) return;
-
-    if (linkerType === 'up') {
-        const target = await getNote(targetNoteId);
-        if (target && !target.linksTo.includes(centralNoteId)) {
-            await updateNote(targetNoteId, { linksTo: [...target.linksTo, centralNoteId] });
+    if (!targetId && newTitle) {
+        // Check for Bulk Import
+        if (newTitle.includes(';')) {
+             const titles = newTitle.split(';').map(t => t.trim()).filter(t => t.length > 0);
+             for (const title of titles) {
+                 const newNote = await createNote(title);
+                 await linkToTarget(newNote.id);
+             }
+        } else {
+             const newNote = await createNote(newTitle);
+             await linkToTarget(newNote.id);
         }
-    } else if (linkerType === 'down') {
-        const center = topology.center;
-        if (center && !center.linksTo.includes(targetNoteId)) {
-            await updateNote(centralNoteId, { linksTo: [...center.linksTo, targetNoteId] });
-        }
-    } else if (linkerType === 'left') {
-        // Bi-directional linking for Lateral (Related) nodes
-        const center = topology.center;
-        
-        // 1. Add Target to Center
-        if (center && !center.relatedTo.includes(targetNoteId)) {
-            await updateNote(centralNoteId, { relatedTo: [...center.relatedTo, targetNoteId] });
-        }
-
-        // 2. Add Center to Target
-        const target = await getNote(targetNoteId);
-        if (target && !target.relatedTo.includes(centralNoteId)) {
-            await updateNote(targetNoteId, { relatedTo: [...target.relatedTo, centralNoteId] });
-        }
+    } else if (targetId) {
+        await linkToTarget(targetId);
     }
 
     loadTopology(centralNoteId);
@@ -337,6 +379,7 @@ function App() {
     a.download = `nexusnode_backup_${getCurrentVaultName()}_${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
+    setShowMainMenu(false);
   };
 
   const importData = () => {
@@ -382,11 +425,32 @@ function App() {
       }
     };
     input.click();
+    setShowMainMenu(false);
   };
 
   // --- Keyboard Handling ---
 
   const handleGlobalKeyDown = useCallback(async (e: React.KeyboardEvent | KeyboardEvent) => {
+    // Close dropdowns on ESC
+    if (e.key === 'Escape') {
+        let closed = false;
+        if (showFavDropdown) {
+            setShowFavDropdown(false);
+            closed = true;
+        }
+        if (showMainMenu) {
+            setShowMainMenu(false);
+            closed = true;
+        }
+
+        if (closed) {
+            setFocusedSection('center');
+            setFocusedIndex(0);
+            e.preventDefault();
+            return;
+        }
+    }
+
     if (renameModalOpen || isSearchActive || editorOpen || linkerOpen || settingsOpen) return;
 
     if (e.key === '/') {
@@ -605,7 +669,7 @@ function App() {
         }
     }
 
-  }, [focusedSection, focusedIndex, topology, centralNoteId, renameModalOpen, isSearchActive, editorOpen, linkerOpen, settingsOpen, fontSize, sectionIndices, getFocusedNote, getSortedNotes]);
+  }, [focusedSection, focusedIndex, topology, centralNoteId, renameModalOpen, isSearchActive, editorOpen, linkerOpen, settingsOpen, fontSize, sectionIndices, getFocusedNote, getSortedNotes, showFavDropdown, showMainMenu]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleGlobalKeyDown as any);
@@ -643,7 +707,13 @@ function App() {
     );
   };
   
-  const labelStyle = "absolute -top-2.5 left-8 px-2 text-xs text-gray-400 dark:text-zinc-600 bg-gray-100 dark:bg-zinc-950 select-none z-20 pointer-events-none";
+  const labelStyle = "absolute -top-3 left-6 px-3 py-0.5 text-xs font-bold tracking-wider text-foreground bg-[var(--theme-section)] text-[var(--theme-accent)] select-none z-20 pointer-events-none rounded-full border border-black/10 dark:border-white/10 uppercase";
+
+  // Calculate UI font size (4 points smaller than note font size, minimum 10px)
+  const uiFontSize = Math.max(10, fontSize - 4);
+
+  const activeNote = getFocusedNote();
+  const activeNoteHasContent = activeNote?.content && activeNote.content.trim().length > 0;
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground font-sans">
@@ -652,21 +722,128 @@ function App() {
       <div className="flex-1 flex flex-col h-full min-w-0">
         
         {/* Top Bar */}
-        <div className="h-14 flex-shrink-0 border-b border-gray-200 dark:border-gray-800 flex items-center px-4 gap-4 bg-card z-40 shadow-sm">
+        <div 
+            style={{ fontSize: `${uiFontSize}px` }} 
+            className="h-14 flex-shrink-0 flex items-center px-4 gap-4 z-40 shadow-md relative bg-[var(--theme-bars)] text-foreground transition-colors duration-300"
+        >
             
-            {/* Left Group: Favorites & Home */}
+            {/* Left Group: Menu, Home, Favorites List */}
             <div className="flex items-center gap-2">
-                 {/* Favorites Dropdown */}
+                
+                {/* Main Menu (Hamburger) */}
                 <div className="relative">
                     <button 
-                        title="Favorites"
+                        onClick={() => setShowMainMenu(!showMainMenu)} 
+                        title="Main Menu"
+                        className="p-2 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+                        style={{ color: 'var(--theme-accent)' }}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                    </button>
+                    {showMainMenu && (
+                        <div className="absolute top-full left-0 mt-2 w-64 bg-card text-foreground border border-gray-200 dark:border-gray-700 shadow-xl rounded-md z-50 flex flex-col py-2">
+                             
+                             {/* Vault Switcher Accordion */}
+                             <div className="border-b border-gray-100 dark:border-gray-800 mb-1 pb-1">
+                                <button 
+                                    onClick={() => setShowVaultListInMenu(!showVaultListInMenu)}
+                                    className="w-full px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center justify-between gap-3 text-sm text-foreground"
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <svg className="text-primary" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+                                        <span>Vault: <span className="font-bold">{getCurrentVaultName()}</span></span>
+                                    </div>
+                                    <span className={`transform transition-transform ${showVaultListInMenu ? 'rotate-180' : ''}`}>▼</span>
+                                </button>
+                                {showVaultListInMenu && (
+                                    <div className="bg-gray-50 dark:bg-zinc-900 border-y border-gray-100 dark:border-gray-800">
+                                        {getVaultList().map(v => (
+                                            <div 
+                                                key={v}
+                                                className={`px-8 py-2 hover:bg-gray-200 dark:hover:bg-gray-800 cursor-pointer text-sm flex justify-between items-center ${
+                                                    v === getCurrentVaultName() ? 'text-primary font-bold' : 'text-gray-500'
+                                                }`}
+                                                onClick={() => {
+                                                    switchVault(v);
+                                                    setShowMainMenu(false);
+                                                }}
+                                            >
+                                                <span className="truncate">{v}</span>
+                                                {v === getCurrentVaultName() && <span>•</span>}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                             </div>
+
+                             {/* Theme Switcher */}
+                             <button 
+                                onClick={() => { setIsDarkMode(!isDarkMode); setShowMainMenu(false); }}
+                                className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-3 text-sm text-foreground"
+                             >
+                                <span className="w-5 flex justify-center text-primary">
+                                    {isDarkMode ? (
+                                        // Sun Icon for "Switch to Light"
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+                                    ) : (
+                                        // Moon Icon for "Switch to Dark"
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                                    )}
+                                </span>
+                                <span>Switch Theme</span>
+                             </button>
+
+                             {/* Settings */}
+                             <button 
+                                onClick={() => { setSettingsOpen(true); setShowMainMenu(false); }}
+                                className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-3 text-sm text-foreground"
+                             >
+                                <svg className="text-primary" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                                <span>Settings</span>
+                             </button>
+
+                             {/* Export */}
+                             <button 
+                                onClick={() => { exportData(); setShowMainMenu(false); }}
+                                className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-3 text-sm text-foreground"
+                             >
+                                <svg className="text-primary" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2 2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                <span>Export Data</span>
+                             </button>
+
+                             {/* Import */}
+                             <button 
+                                onClick={() => { importData(); setShowMainMenu(false); }}
+                                className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-3 text-sm text-foreground"
+                             >
+                                <svg className="text-primary" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                                <span>Import Data</span>
+                             </button>
+                        </div>
+                    )}
+                </div>
+
+                <button 
+                    onClick={goHome} 
+                    title="Go Home" 
+                    className="p-2 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+                    style={{ color: 'var(--theme-accent)' }}
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                </button>
+
+                 {/* Favorites Dropdown */}
+                 <div className="relative">
+                    <button 
+                        title="Favorites List"
                         onClick={() => setShowFavDropdown(!showFavDropdown)} 
-                        className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-yellow-500"
+                        className="p-2 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+                        style={{ color: 'var(--theme-accent)' }}
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
                     </button>
                     {showFavDropdown && (
-                        <div className="absolute top-full left-0 mt-2 w-64 bg-card border border-gray-200 dark:border-gray-700 shadow-xl rounded-md z-50 max-h-80 overflow-y-auto">
+                        <div className="absolute top-full left-0 mt-2 w-64 bg-card text-foreground border border-gray-200 dark:border-gray-700 shadow-xl rounded-md z-50 max-h-80 overflow-y-auto">
                             <div className="p-2 font-bold text-xs uppercase text-gray-500 border-b dark:border-gray-700">Favorites</div>
                             {favorites.length === 0 && <div className="p-3 text-sm text-gray-500 italic text-center">No favorites yet</div>}
                             {favorites.map(fav => (
@@ -684,19 +861,67 @@ function App() {
                         </div>
                     )}
                 </div>
+            </div>
 
-                <button onClick={goHome} title="Go Home" className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
-                    🏠
+            {/* Separator 1 */}
+            <div className="h-6 w-px bg-current opacity-20 mx-1"></div>
+
+            {/* Center Group: Note Actions */}
+             <div className="flex items-center gap-2">
+                <button 
+                    title="Toggle Favorite (Current Note)"
+                    onClick={handleFavoriteToggle} 
+                    className={`p-2 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${
+                        activeNote?.isFavorite 
+                            ? '' 
+                            : 'text-gray-400'
+                    }`}
+                    style={activeNote?.isFavorite ? { color: 'var(--theme-accent)' } : {}}
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill={activeNote?.isFavorite ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                </button>
+                <button 
+                    onClick={handleOpenEditor} 
+                    title="View Content (Shift+Enter)" 
+                    className={`p-2 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${
+                        activeNoteHasContent 
+                            ? '' 
+                            : 'text-gray-400'
+                    }`}
+                    style={activeNoteHasContent ? { color: 'var(--theme-accent)' } : {}}
+                >
+                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill={activeNoteHasContent ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                </button>
+                <button 
+                    onClick={handleStartRename} 
+                    title="Rename Note (F2)" 
+                    className="p-2 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+                    style={{ color: 'var(--theme-accent)' }}
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                </button>
+                <button 
+                    type="button"
+                    onClick={handleDeleteFocusedNote} 
+                    title="Delete Note (Ctrl+Backspace)" 
+                    className="p-2 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+                    style={{ color: 'var(--theme-accent)' }}
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                 </button>
             </div>
 
-            {/* Center: Search */}
+            {/* Separator 2 */}
+            <div className="h-6 w-px bg-current opacity-20 mx-1"></div>
+
+            {/* Right: Search (Fill) */}
             <div className="relative flex-1">
                 <input 
                     ref={searchInputRef}
                     type="text" 
                     placeholder="Search (Press /)" 
-                    className="w-full bg-gray-100 dark:bg-gray-800 rounded-md px-3 py-1.5 focus:ring-2 focus:ring-primary outline-none text-sm transition-all"
+                    className="w-full bg-black/5 dark:bg-black/20 text-foreground placeholder-gray-500 dark:placeholder-white/40 rounded-md px-3 py-1.5 outline-none transition-all border border-transparent focus:bg-black/10 dark:focus:bg-black/30"
+                    style={{ fontSize: 'inherit', borderColor: 'var(--theme-accent)' }}
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
                     onFocus={() => setIsSearchActive(true)}
@@ -721,7 +946,7 @@ function App() {
                     }}
                 />
                 {isSearchActive && searchResults.length > 0 && (
-                    <div ref={searchResultsRef} className="absolute top-full left-0 right-0 bg-card border border-gray-200 dark:border-gray-700 shadow-xl rounded-b-md mt-1 z-50 max-h-96 overflow-y-auto">
+                    <div ref={searchResultsRef} className="absolute top-full left-0 right-0 bg-card text-foreground border border-gray-200 dark:border-gray-700 shadow-xl rounded-b-md mt-1 z-50 max-h-96 overflow-y-auto">
                         {searchResults.map((res, idx) => (
                             <div 
                                 key={res.id} 
@@ -737,103 +962,20 @@ function App() {
                 )}
             </div>
 
-            {/* Right Group: Tools */}
-            <div className="flex items-center gap-2">
-                {/* Note Actions */}
-                <button 
-                    title="Toggle Favorite (Current Note)"
-                    onClick={handleFavoriteToggle} 
-                    className={`p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 ${getFocusedNote()?.isFavorite ? 'text-yellow-500' : 'text-gray-400'}`}
-                >
-                    {getFocusedNote()?.isFavorite ? '★' : '☆'}
-                </button>
-                <button 
-                    onClick={handleOpenEditor} 
-                    title="View Content (Shift+Enter)" 
-                    className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 hover:text-primary"
-                >
-                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                </button>
-                <button 
-                    onClick={handleStartRename} 
-                    title="Rename Note (F2)" 
-                    className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 hover:text-primary"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                </button>
-                <button 
-                    onClick={handleDeleteFocusedNote} 
-                    title="Delete Note (Ctrl+Backspace)" 
-                    className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 hover:text-red-500"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                </button>
-
-                <div className="h-6 w-px bg-gray-300 dark:bg-gray-700 mx-2"></div>
-
-                {/* App Tools */}
-                <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
-                    {isDarkMode ? '☀' : '☾'}
-                </button>
-                <button onClick={() => setSettingsOpen(true)} className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
-                    ⚙
-                </button>
-                
-                <button onClick={exportData} title="Export JSON" className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-primary">
-                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2 2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                </button>
-                <button onClick={importData} title="Import JSON" className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-primary">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                </button>
-                
-                {/* Vault Switcher */}
-                <div className="relative">
-                    <button 
-                        onClick={() => setShowVaultDropdown(!showVaultDropdown)}
-                        title="Open Vault" 
-                        className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-primary"
-                    >
-                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
-                    </button>
-                    {showVaultDropdown && (
-                        <div className="absolute top-full right-0 mt-2 w-56 bg-card border border-gray-200 dark:border-gray-700 shadow-xl rounded-md z-50 max-h-80 overflow-y-auto">
-                            <div className="p-2 font-bold text-xs uppercase text-gray-500 border-b dark:border-gray-700">Vaults</div>
-                            {getVaultList().map(v => (
-                                <div 
-                                    key={v}
-                                    className={`px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer text-sm flex justify-between items-center ${
-                                        v === getCurrentVaultName() ? 'text-primary font-bold' : ''
-                                    }`}
-                                    onClick={() => {
-                                        switchVault(v);
-                                        setShowVaultDropdown(false);
-                                    }}
-                                >
-                                    <span className="truncate">{v}</span>
-                                    {v === getCurrentVaultName() && <span>•</span>}
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-
-            </div>
         </div>
 
         {/* Canvas Area - GUTTERED GRID */}
-        {/* Changed gutter to gap-6 (double) and background to gray-100/zinc-950 for slight contrast */}
         <div 
             ref={mainContainerRef}
-            className="flex-1 bg-gray-100 dark:bg-zinc-950 p-6 overflow-hidden outline-none relative" 
+            className="flex-1 bg-[var(--theme-bg)] p-6 overflow-hidden outline-none relative transition-colors duration-300" 
             tabIndex={0}
         >
             {/* Changed from percentages to fractions to handle gap without overflow */}
-            <div className="grid grid-cols-[1fr_2fr_1fr] grid-rows-[1fr_minmax(150px,auto)_1fr] gap-6 h-full w-full">
+            <div className="grid grid-cols-[1fr_2fr_1fr] grid-rows-[1fr_minmax(150px,auto)_1fr] gap-4 h-full w-full">
                 
                 {/* 1. Uppers (Top Row, Spanning) */}
-                {/* Changed rounded-lg to rounded-3xl and bg to white/zinc-900 */}
-                <div className="col-start-1 col-end-3 row-start-1 min-h-0 min-w-0 bg-white dark:bg-zinc-900 rounded-3xl shadow-sm border border-gray-200 dark:border-gray-800 relative">
-                    <div className={labelStyle}>Uppers</div>
+                <div className="col-start-1 col-end-3 row-start-1 min-h-0 min-w-0 bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 relative">
+                    <div className={labelStyle}>Parents</div>
                     <div className="absolute inset-0 overflow-x-auto overflow-y-hidden custom-scrollbar">
                         {renderSection(
                             topology.uppers, 
@@ -846,8 +988,8 @@ function App() {
                 </div>
 
                 {/* 2. Lefters (Left Col, Mid Row) */}
-                <div className="col-start-1 row-start-2 min-h-0 min-w-0 relative bg-white dark:bg-zinc-900 rounded-3xl shadow-sm border border-gray-200 dark:border-gray-800">
-                    <div className={labelStyle}>Lefters</div>
+                <div className="col-start-1 row-start-2 min-h-0 min-w-0 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5">
+                    <div className={labelStyle}>Related</div>
                     {renderSection(
                         topology.lefters, 
                         'left', 
@@ -857,8 +999,8 @@ function App() {
                 </div>
 
                 {/* 3. CENTER STAGE (Center Col, Mid Row) */}
-                <div className="col-start-2 row-start-2 flex items-center justify-center p-4 z-10 relative min-h-0 min-w-0 bg-white dark:bg-zinc-900 rounded-3xl shadow-sm border border-gray-200 dark:border-gray-800">
-                     <div className={labelStyle}>Center</div>
+                <div className="col-start-2 row-start-2 flex items-center justify-center p-4 z-10 relative min-h-0 min-w-0 bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5">
+                     <div className={labelStyle}>Active Note</div>
                      {topology.center && (
                         <NoteCard
                             note={topology.center}
@@ -871,8 +1013,8 @@ function App() {
                 </div>
 
                 {/* 4. Righters (Right Col, Full Height) */}
-                <div className="col-start-3 row-start-1 row-span-3 min-h-0 min-w-0 bg-white dark:bg-zinc-900 rounded-3xl shadow-sm border border-gray-200 dark:border-gray-800 relative">
-                     <div className={labelStyle}>Righters</div>
+                <div className="col-start-3 row-start-1 row-span-3 min-h-0 min-w-0 bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 relative">
+                     <div className={labelStyle}>Siblings</div>
                      {renderSection(
                         topology.righters, 
                         'right', 
@@ -882,8 +1024,8 @@ function App() {
                 </div>
 
                 {/* 5. Downers (Bottom Row, Spanning) */}
-                <div className="col-start-1 col-end-3 row-start-3 min-h-0 min-w-0 bg-white dark:bg-zinc-900 rounded-3xl shadow-sm border border-gray-200 dark:border-gray-800 relative">
-                    <div className={labelStyle}>Downers</div>
+                <div className="col-start-1 col-end-3 row-start-3 min-h-0 min-w-0 bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 relative">
+                    <div className={labelStyle}>Children</div>
                     <div className="absolute inset-0 overflow-x-auto overflow-y-hidden custom-scrollbar">
                         {renderSection(
                             topology.downers, 
@@ -899,13 +1041,12 @@ function App() {
         </div>
         
         {/* --- Footer / Status Bar --- */}
-        <div className="h-8 flex-shrink-0 bg-card border-t border-gray-200 dark:border-gray-800 flex items-center justify-between px-4 text-sm text-primary z-50">
-            <div>
-                Number of notes: {totalNoteCount}
+        <div style={{ fontSize: `${uiFontSize}px` }} className="h-8 flex-shrink-0 bg-[var(--theme-bars)] flex items-center justify-between px-4 text-foreground z-50 transition-colors duration-300">
+            <div className="flex-shrink-0 opacity-90">
+                Notes: {totalNoteCount} | DB: {getCurrentVaultName()}
             </div>
-            {/* Removed 'hidden xl:block' to ensure visibility on all screen sizes, added truncate for safety */}
-            <div className="opacity-80 truncate ml-4">
-                Arrows: Nav | Space: Recenter | Enter: Focus | Shift+Enter: Edit | Ctrl+Arrows: Link | F2: Rename | Bksp: Unlink | DB: {getCurrentVaultName()}
+            <div className="opacity-60 truncate ml-4 text-right">
+                Arrows: Nav | Space: Recenter | Enter: Focus | Shift+Enter: Edit | Ctrl+Arrows: Link | F2: Rename | Bksp: Unlink
             </div>
         </div>
 
@@ -939,6 +1080,7 @@ function App() {
         currentCentralNoteId={centralNoteId}
         fontSize={fontSize}
         onFontSizeChange={setFontSize}
+        onThemeChange={() => setThemeTick(t => t + 1)}
       />
     </div>
   );
