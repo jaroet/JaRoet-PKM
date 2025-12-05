@@ -2,6 +2,12 @@
 
 All notable changes to the JaRoet PKM project will be documented in this file.
 
+## [0.1.3] - 2024-05-23
+
+### Changed
+- **Git Tracking:** Added `.gitignore` configuration to ensure the standalone `dist/index.html` file is properly tracked in version control.
+- **Version:** Bumped version number to 0.1.3.
+
 ## [0.1.2] - 2024-05-23
 
 ### Added

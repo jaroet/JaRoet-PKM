@@ -1012,7 +1012,7 @@ function App() {
   const renderSection = (
     notes: Note[], 
     section: Section, 
-    containerClasses: string,
+    containerClasses: string, 
     itemClasses: string,
     containerId?: string
   ) => {
@@ -1484,7 +1484,7 @@ function App() {
         {/* --- Footer / Status Bar --- */}
         <div style={{ fontSize: `${uiFontSize}px` }} className="h-8 flex-shrink-0 bg-[var(--theme-bars)] flex items-center justify-between px-4 text-foreground z-50 transition-colors duration-300">
             <div className="flex-shrink-0 opacity-90">
-                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} | Version: 0.1.2
+                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} | Version: 0.1.3
             </div>
             <div className="opacity-60 truncate ml-4 text-right">
                 Arrows: Nav | Space: Recenter | Enter: Focus | Shift+Enter: Edit | Ctrl+Arrows: Link | F2: Rename | Bksp: Unlink
