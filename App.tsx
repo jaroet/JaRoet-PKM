@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { marked } from 'marked';
-import { db, getTopology, createNote, updateNote, deleteNote, getFavorites, toggleFavorite, seedDatabase, getNote, getAllNotes, importNotes, getHomeNoteId, searchNotes, getFontSize, getNoteCount, getVaultList, getCurrentVaultName, switchVault, getAppTheme, AppTheme } from './services/db';
+import { db, getTopology, createNote, updateNote, deleteNote, getFavorites, toggleFavorite, seedDatabase, getNote, getAllNotes, importNotes, getHomeNoteId, searchNotes, getFontSize, getNoteCount, getVaultList, getCurrentVaultName, switchVault, getAppTheme, AppTheme, getSectionVisibility } from './services/db';
+import { goToToday } from './services/journal';
 import { Note, Section, Topology, SearchResult } from './types';
 import NoteCard from './components/NoteCard';
 import LinkerModal from './components/LinkerModal';
@@ -56,9 +57,13 @@ function App() {
   // Default Dark Mode = true
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [fontSize, setFontSize] = useState(16);
-  // Force update trigger for theme changes
+  // Force update trigger for theme/settings changes
   const [themeTick, setThemeTick] = useState(0);
   const [totalNoteCount, setTotalNoteCount] = useState(0);
+
+  // Settings: Visibility
+  const [showFavorites, setShowFavorites] = useState(true);
+  const [showContent, setShowContent] = useState(true);
   
   // Navigation State
   const [focusedSection, setFocusedSection] = useState<Section>('center');
@@ -109,6 +114,11 @@ function App() {
       const fs = await getFontSize();
       setFontSize(fs);
 
+      // Visibility
+      const vis = await getSectionVisibility();
+      setShowFavorites(vis.showFavorites);
+      setShowContent(vis.showContent);
+
       refreshFavorites();
       updateTotalCount();
 
@@ -124,6 +134,12 @@ function App() {
     };
     init();
   }, []);
+
+  const refreshSettings = async () => {
+       const vis = await getSectionVisibility();
+       setShowFavorites(vis.showFavorites);
+       setShowContent(vis.showContent);
+  };
 
   useEffect(() => {
     if (isDarkMode) {
@@ -294,6 +310,18 @@ function App() {
   useEffect(() => {
     if (focusedSection === 'center' || focusedSection === 'content') return;
     
+    // Safety check if hidden sections are focused (though keyboard logic prevents this, mouse or weird state might cause it)
+    if (focusedSection === 'favs' && !showFavorites) {
+        setFocusedSection('left');
+        setFocusedIndex(0);
+        return;
+    }
+    if (focusedSection === 'content' && !showContent) {
+        setFocusedSection('right');
+        setFocusedIndex(0);
+        return;
+    }
+
     const notes = getSortedNotes(focusedSection);
     // If section is empty but we are focused on it, move to center
     if (notes.length === 0) {
@@ -306,7 +334,7 @@ function App() {
     if (focusedIndex >= notes.length) {
         setFocusedIndex(notes.length - 1);
     }
-  }, [topology, favorites, focusedSection, focusedIndex, getSortedNotes]);
+  }, [topology, favorites, focusedSection, focusedIndex, getSortedNotes, showFavorites, showContent]);
 
 
   // --- Actions ---
@@ -318,6 +346,11 @@ function App() {
       loadTopology(centralNoteId!); // Reload to update UI
       refreshFavorites();
     }
+  };
+
+  const handleJournal = async () => {
+      const todayId = await goToToday();
+      setCentralNoteId(todayId);
   };
 
   const handleRename = async (newTitle: string) => {
@@ -654,6 +687,13 @@ function App() {
       setTimeout(() => searchInputRef.current?.focus(), 50);
       return;
     }
+    
+    // Journal Mode
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') {
+        e.preventDefault();
+        handleJournal();
+        return;
+    }
 
     // Toggle Selection (x)
     if (e.key === 'x') {
@@ -786,7 +826,7 @@ function App() {
         e.preventDefault();
         
         // --- Range Selection (Shift+Up) ---
-        if (e.shiftKey && ['up', 'down', 'left', 'right', 'favs'].includes(focusedSection)) {
+        if (e.shiftKey && (['up', 'down', 'left', 'right', 'favs'] as Section[]).includes(focusedSection)) {
              const notes = getSortedNotes(focusedSection);
              if (notes.length === 0) return;
 
@@ -846,7 +886,7 @@ function App() {
         e.preventDefault();
 
         // --- Range Selection (Shift+Down) ---
-        if (e.shiftKey && ['up', 'down', 'left', 'right', 'favs'].includes(focusedSection)) {
+        if (e.shiftKey && (['up', 'down', 'left', 'right', 'favs'] as Section[]).includes(focusedSection)) {
              const notes = getSortedNotes(focusedSection);
              if (notes.length === 0) return;
 
@@ -892,7 +932,7 @@ function App() {
         } else if (focusedSection === 'left') {
              const arr = topology.lefters;
              if (focusedIndex === arr.length - 1) {
-                 if (favorites.length > 0) {
+                 if (showFavorites && favorites.length > 0) {
                     setFocusedSection('favs');
                     setFocusedIndex(Math.min(sectionIndices.favs, favorites.length - 1));
                  }
@@ -902,7 +942,9 @@ function App() {
         } else if (focusedSection === 'right') {
              const arr = topology.righters;
              if (focusedIndex === arr.length - 1) {
-                 setFocusedSection('content');
+                 if (showContent) {
+                     setFocusedSection('content');
+                 }
              } else {
                  setFocusedIndex(prev => Math.min(arr.length - 1, prev + 1));
              }
@@ -925,7 +967,7 @@ function App() {
                 setFocusedSection('left');
                 const target = Math.min(sectionIndices.left, topology.lefters.length - 1);
                 setFocusedIndex(target);
-            } else if (favorites.length > 0) {
+            } else if (showFavorites && favorites.length > 0) {
                  setFocusedSection('favs');
                  const target = Math.min(sectionIndices.favs, favorites.length - 1);
                  setFocusedIndex(target);
@@ -937,7 +979,7 @@ function App() {
              setFocusedIndex(Math.min(sectionIndices.up, topology.uppers.length - 1));
         } else if (focusedSection === 'down') {
              // Children -> Favorites?
-             if (favorites.length > 0) {
+             if (showFavorites && favorites.length > 0) {
                  setFocusedSection('favs');
                  setFocusedIndex(Math.min(sectionIndices.favs, favorites.length - 1));
              } else {
@@ -971,7 +1013,7 @@ function App() {
                 setFocusedSection('right');
                 const target = Math.min(sectionIndices.right, topology.righters.length - 1);
                 setFocusedIndex(target);
-            } else {
+            } else if (showContent) {
                 setFocusedSection('content');
             }
         } else if (focusedSection === 'left') {
@@ -984,7 +1026,13 @@ function App() {
              setFocusedSection('right');
              setFocusedIndex(Math.min(sectionIndices.right, topology.righters.length - 1));
         } else if (focusedSection === 'down') {
-             setFocusedSection('content');
+             if (showContent) {
+                setFocusedSection('content');
+             } else if (topology.righters.length > 0) {
+                // If content is hidden, down -> right
+                setFocusedSection('right');
+                setFocusedIndex(Math.min(sectionIndices.right, topology.righters.length - 1));
+             }
         } else if (focusedSection === 'right') {
             // Column wrap
             const containerId = 'container-right';
@@ -1000,7 +1048,7 @@ function App() {
         }
     }
 
-  }, [focusedSection, focusedIndex, topology, favorites, centralNoteId, renameModalOpen, isSearchActive, editorOpen, linkerOpen, settingsOpen, fontSize, sectionIndices, getFocusedNote, getSortedNotes, showFavDropdown, showMainMenu, selectedNoteIds]);
+  }, [focusedSection, focusedIndex, topology, favorites, centralNoteId, renameModalOpen, isSearchActive, editorOpen, linkerOpen, settingsOpen, fontSize, sectionIndices, getFocusedNote, getSortedNotes, showFavDropdown, showMainMenu, selectedNoteIds, showFavorites, showContent]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleGlobalKeyDown as any);
@@ -1173,6 +1221,15 @@ function App() {
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
                 </button>
 
+                <button 
+                    onClick={handleJournal} 
+                    title="Go to Today's Journal (Ctrl+J)" 
+                    className="p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+                    style={{ color: 'var(--theme-accent)' }}
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                </button>
+
                  {/* Favorites Dropdown */}
                  <div className="relative">
                     <button 
@@ -1181,7 +1238,17 @@ function App() {
                         className="p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
                         style={{ color: 'var(--theme-accent)' }}
                     >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <g transform="translate(-1, 7) scale(0.4)">
+                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                            </g>
+                            <g transform="translate(7, 7) scale(0.4)">
+                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                            </g>
+                            <g transform="translate(15, 7) scale(0.4)">
+                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                            </g>
+                        </svg>
                     </button>
                     {showFavDropdown && (
                         <div className="absolute top-full left-0 mt-2 w-64 bg-card text-foreground border border-gray-200 dark:border-gray-700 shadow-xl rounded-md z-50 max-h-80 overflow-y-auto">
@@ -1364,7 +1431,7 @@ function App() {
                 <div className="flex flex-col gap-3 w-1/4">
                     
                     {/* Related (Top Left) */}
-                    <div className="flex-1 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
+                    <div className={`${showFavorites ? 'flex-1' : 'h-full'} relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0`}>
                         <div className={labelStyle} style={{ fontSize: `${Math.max(8, fontSize - 10)}px` }}>Related</div>
                         {renderSection(
                             topology.lefters, 
@@ -1375,17 +1442,19 @@ function App() {
                         )}
                     </div>
 
-                    {/* Favorites (Bottom Left) */}
-                    <div className="flex-1 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
-                        <div className={labelStyle} style={{ fontSize: `${Math.max(8, fontSize - 10)}px` }}>Favorites</div>
-                        {renderSection(
-                            favorites, 
-                            'favs', 
-                            'absolute inset-0 flex flex-col gap-0 overflow-y-auto p-3 custom-scrollbar rounded-3xl pt-6',
-                            'w-full',
-                            'container-favs'
-                        )}
-                    </div>
+                    {/* Favorites (Bottom Left) - Conditional */}
+                    {showFavorites && (
+                        <div className="flex-1 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
+                            <div className={labelStyle} style={{ fontSize: `${Math.max(8, fontSize - 10)}px` }}>Favorites</div>
+                            {renderSection(
+                                favorites, 
+                                'favs', 
+                                'absolute inset-0 flex flex-col gap-0 overflow-y-auto p-3 custom-scrollbar rounded-3xl pt-6',
+                                'w-full',
+                                'container-favs'
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* --- Center Column (50%) --- */}
@@ -1453,7 +1522,7 @@ function App() {
                 <div className="flex flex-col gap-3 w-1/4">
                     
                     {/* Siblings (Top Right) */}
-                    <div className="flex-1 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
+                    <div className={`${showContent ? 'flex-1' : 'h-full'} relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0`}>
                         <div className={labelStyle} style={{ fontSize: `${Math.max(8, fontSize - 10)}px` }}>Siblings</div>
                          {renderSection(
                             topology.righters, 
@@ -1464,18 +1533,20 @@ function App() {
                         )}
                     </div>
 
-                    {/* Content Preview (Bottom Right) */}
-                    <div 
-                        ref={contentPreviewRef}
-                        className={`flex-1 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0 outline-none ${focusedSection === 'content' ? 'ring-2 ring-[var(--theme-accent)]' : ''}`}
-                        tabIndex={-1}
-                    >
-                         <div className={labelStyle} style={{ fontSize: `${Math.max(8, fontSize - 10)}px` }}>Content</div>
-                         <div 
-                            className="absolute inset-0 p-6 overflow-auto custom-scrollbar prose dark:prose-invert max-w-none rounded-3xl pt-8"
-                            dangerouslySetInnerHTML={{ __html: previewHtml }}
-                         />
-                    </div>
+                    {/* Content Preview (Bottom Right) - Conditional */}
+                    {showContent && (
+                        <div 
+                            ref={contentPreviewRef}
+                            className={`flex-1 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0 outline-none ${focusedSection === 'content' ? 'ring-2 ring-[var(--theme-accent)]' : ''}`}
+                            tabIndex={-1}
+                        >
+                             <div className={labelStyle} style={{ fontSize: `${Math.max(8, fontSize - 10)}px` }}>Content</div>
+                             <div 
+                                className="absolute inset-0 p-6 overflow-auto custom-scrollbar prose dark:prose-invert max-w-none rounded-3xl pt-8"
+                                dangerouslySetInnerHTML={{ __html: previewHtml }}
+                             />
+                        </div>
+                    )}
                 </div>
 
             </div>
@@ -1484,7 +1555,7 @@ function App() {
         {/* --- Footer / Status Bar --- */}
         <div style={{ fontSize: `${uiFontSize}px` }} className="h-8 flex-shrink-0 bg-[var(--theme-bars)] flex items-center justify-between px-4 text-foreground z-50 transition-colors duration-300">
             <div className="flex-shrink-0 opacity-90">
-                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.1.9
+                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.2.2
             </div>
             <div className="opacity-60 truncate ml-4 text-right">
                 Arrows: Nav | Space: Recenter | Enter: Focus | Shift+Enter: Edit | Ctrl+Arrows: Link | F2: Rename | Bksp: Unlink
@@ -1522,6 +1593,7 @@ function App() {
         fontSize={fontSize}
         onFontSizeChange={setFontSize}
         onThemeChange={() => setThemeTick(t => t + 1)}
+        onSettingsChange={refreshSettings}
       />
     </div>
   );

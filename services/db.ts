@@ -269,6 +269,26 @@ export const setFontSize = async (size: number) => {
     await db.meta.put({ key: 'fontSize', value: size });
 };
 
+// --- App Settings (Visibility) ---
+
+export interface SectionVisibility {
+    showFavorites: boolean;
+    showContent: boolean;
+}
+
+export const getSectionVisibility = async (): Promise<SectionVisibility> => {
+    const fav = await db.meta.get('ui_showFavorites');
+    const cont = await db.meta.get('ui_showContent');
+    return {
+        showFavorites: fav !== undefined ? fav.value : true,
+        showContent: cont !== undefined ? cont.value : true
+    };
+};
+
+export const setSectionVisibility = async (key: 'showFavorites' | 'showContent', value: boolean) => {
+    await db.meta.put({ key: `ui_${key}`, value });
+};
+
 // --- App Settings (Theming) ---
 
 export interface ThemeConfig {

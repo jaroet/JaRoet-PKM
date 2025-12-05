@@ -2,6 +2,28 @@
 
 All notable changes to the JaRoet PKM project will be documented in this file.
 
+## [0.2.2] - 2024-05-23
+
+### Added
+- **UI Customization:** Added new "General" settings to toggle the visibility of the "Favorites" and "Content" sections.
+- **Dynamic Layout:** When "Favorites" or "Content" are hidden, the adjacent sections ("Related" and "Siblings" respectively) now automatically expand vertically to fill the available space.
+- **Navigation Update:** Keyboard navigation logic updated to respect hidden sections, preventing focus on invisible elements and redirecting flow to visible sections.
+
+## [0.2.1] - 2024-05-23
+
+### Changed
+- **UI Update:** Updated the "Favorites List" icon (dropdown) to display three smaller stars instead of a single star, distinguishing it from the "Toggle Favorite" action.
+- **Version:** Bumped version number to 0.2.1.
+
+## [0.2.0] - 2024-05-23
+
+### Added
+- **Chronological Journaling:** Introduced a new Journal Mode accessible via a calendar icon in the top bar or `Ctrl+J`.
+  - Automatically creates a time-based hierarchy: `Journal Hub` -> `Journal YYYY` -> `YYYY-MM (Month)` -> `YYYY-MM-DD (Day)`.
+  - Links "Today" to "Yesterday" laterally (Related) for easy traversing.
+  - Links "Today" to "Same Day, Previous Years" laterally (Related) for "On This Day" functionality.
+  - Injects a daily markdown template for new entries.
+
 ## [0.1.9] - 2024-05-23
 
 ### Changed

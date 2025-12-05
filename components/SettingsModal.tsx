@@ -12,7 +12,9 @@ import {
     resetCurrentVault,
     getAppTheme,
     setAppTheme,
-    AppTheme
+    AppTheme,
+    getSectionVisibility,
+    setSectionVisibility
 } from '../services/db';
 
 interface SettingsModalProps {
@@ -22,9 +24,10 @@ interface SettingsModalProps {
   fontSize: number;
   onFontSizeChange: (size: number) => void;
   onThemeChange: () => void;
+  onSettingsChange: () => void;
 }
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, currentCentralNoteId, fontSize, onFontSizeChange, onThemeChange }) => {
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, currentCentralNoteId, fontSize, onFontSizeChange, onThemeChange, onSettingsChange }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'theme' | 'database'>('general');
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>('dark');
   const [homeNoteTitle, setHomeNoteTitle] = useState('Loading...');
@@ -33,6 +36,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, currentC
   const [localFontSize, setLocalFontSize] = useState(fontSize);
   
   const [appTheme, setLocalAppTheme] = useState<AppTheme | null>(null);
+  const [showFavorites, setShowFavorites] = useState(true);
+  const [showContent, setShowContent] = useState(true);
   
   // Vault Management State
   const [newVaultName, setNewVaultName] = useState('');
@@ -44,6 +49,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, currentC
     if (isOpen) {
       loadHomeNote();
       loadTheme();
+      loadVisibility();
       setSearchQuery('');
       setSearchResults([]);
       setLocalFontSize(fontSize);
@@ -60,6 +66,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, currentC
   const loadTheme = async () => {
       const t = await getAppTheme();
       setLocalAppTheme(t);
+  };
+
+  const loadVisibility = async () => {
+      const v = await getSectionVisibility();
+      setShowFavorites(v.showFavorites);
+      setShowContent(v.showContent);
   };
 
   const loadHomeNote = async () => {
@@ -117,6 +129,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, currentC
       setLocalAppTheme(newTheme);
       await setAppTheme(newTheme);
       onThemeChange();
+  };
+
+  const handleVisibilityChange = async (key: 'showFavorites' | 'showContent', val: boolean) => {
+      if (key === 'showFavorites') setShowFavorites(val);
+      if (key === 'showContent') setShowContent(val);
+      
+      await setSectionVisibility(key, val);
+      onSettingsChange();
   };
 
   const handleCreateVault = () => {
@@ -207,6 +227,32 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, currentC
                             />
                         </div>
                         <p className="text-xs text-gray-400 mt-2">Affects note lists. Central note is 150% of this size.</p>
+                    </div>
+
+                    {/* Section Visibility */}
+                    <div className="border-b border-gray-100 dark:border-gray-800 pb-6">
+                        <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Section Visibility</h3>
+                        <div className="flex flex-col gap-3">
+                            <label className="flex items-center gap-3 cursor-pointer">
+                                <input 
+                                    type="checkbox" 
+                                    className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                                    checked={showFavorites}
+                                    onChange={(e) => handleVisibilityChange('showFavorites', e.target.checked)}
+                                />
+                                <span className="text-sm font-medium">Show Favorites Section</span>
+                            </label>
+                            <label className="flex items-center gap-3 cursor-pointer">
+                                <input 
+                                    type="checkbox" 
+                                    className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                                    checked={showContent}
+                                    onChange={(e) => handleVisibilityChange('showContent', e.target.checked)}
+                                />
+                                <span className="text-sm font-medium">Show Content Section</span>
+                            </label>
+                        </div>
+                         <p className="text-xs text-gray-400 mt-2">When hidden, the section above will expand to fill the vertical space.</p>
                     </div>
 
                     {/* Home Note Settings */}
