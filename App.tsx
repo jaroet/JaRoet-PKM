@@ -73,6 +73,8 @@ function App() {
 
   // Selection State
   const [selectedNoteIds, setSelectedNoteIds] = useState<Set<string>>(new Set());
+  // Ref to track selection for event handlers to avoid stale closures
+  const selectedNoteIdsRef = useRef<Set<string>>(new Set());
 
   // Modals & UI State
   const [showMainMenu, setShowMainMenu] = useState(false);
@@ -148,6 +150,11 @@ function App() {
       document.documentElement.classList.remove('dark');
     }
   }, [isDarkMode]);
+
+  // Sync Ref with State
+  useEffect(() => {
+      selectedNoteIdsRef.current = selectedNoteIds;
+  }, [selectedNoteIds]);
 
   // Apply Theme Color via CSS Variables
   useEffect(() => {
@@ -375,29 +382,7 @@ function App() {
     if (note) setEditorOpen(true);
   };
 
-  const performDelete = async (note: Note) => {
-        await deleteNote(note.id);
-        
-        // If we deleted the central note, we must navigate away
-        if (note.id === centralNoteId) {
-            goHome(); // This will fallback to first available if home is gone
-        } else {
-            // We deleted a peripheral note, just refresh topology
-            if (centralNoteId) loadTopology(centralNoteId);
-        }
-        refreshFavorites(); // In case we deleted a favorite
-        updateTotalCount();
-  };
-
-  const handleDeleteFocusedNote = async (e?: React.MouseEvent) => {
-    if (e) e.preventDefault();
-    const note = getFocusedNote();
-    if (note) {
-        await performDelete(note);
-    }
-  };
-
-  const goHome = async () => {
+  const goHome = useCallback(async () => {
     const homeId = await getHomeNoteId();
     if (homeId) {
         // Verify existence
@@ -417,13 +402,74 @@ function App() {
     } else {
         setSettingsOpen(true);
     }
-  };
+  }, []);
+
+  // --- Deletion Logic ---
+
+  // Helper: Actual deletion logic
+  const performDeleteOp = useCallback(async (id: string) => {
+      await deleteNote(id);
+      if (id === centralNoteId) return true; // Signal that central note was deleted
+      return false;
+  }, [centralNoteId]);
+
+  const handleDeleteAction = useCallback(async (e?: React.MouseEvent | React.KeyboardEvent) => {
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    // PATH 1: Bulk Delete (if selection exists)
+    const selectedIds = Array.from(selectedNoteIdsRef.current) as string[];
+    
+    if (selectedIds.length > 0) {
+        if(confirm(`Confirm deletion of ${selectedIds.length} selected notes?`)) {
+            let centerDeleted = false;
+            
+            // Execute deletes
+            for (const id of selectedIds) {
+                const wasCenter = await performDeleteOp(id);
+                if (wasCenter) centerDeleted = true;
+            }
+
+            // Cleanup
+            setSelectedNoteIds(new Set()); // Clear selection immediately
+            
+            if (centerDeleted) {
+                await goHome();
+            } else {
+                if (centralNoteId) await loadTopology(centralNoteId);
+            }
+            refreshFavorites();
+            updateTotalCount();
+        }
+        return; // EXIT - Do not fall through to single delete
+    }
+
+    // PATH 2: Single Delete (Focused Note)
+    const note = getFocusedNote();
+    if (note) {
+        if (confirm(`Delete note "${note.title}"?`)) {
+            const wasCenter = await performDeleteOp(note.id);
+            
+            if (wasCenter) {
+                await goHome();
+            } else {
+                if (centralNoteId) await loadTopology(centralNoteId);
+            }
+            refreshFavorites();
+            updateTotalCount();
+        }
+    }
+  }, [centralNoteId, getFocusedNote, performDeleteOp, goHome]);
+
 
   // --- Relationship Management Logic ---
 
   const getSelectedOrFocusedNotes = (): string[] => {
-      if (selectedNoteIds.size > 0) {
-          return Array.from(selectedNoteIds);
+      // Access ref for freshness
+      if (selectedNoteIdsRef.current.size > 0) {
+          return Array.from(selectedNoteIdsRef.current);
       }
       const active = getFocusedNote();
       return active ? [active.id] : [];
@@ -447,18 +493,18 @@ function App() {
 
         // Remove if Child
         if (center.linksTo.includes(targetId)) {
-            await updateNote(centerId, { linksTo: center.linksTo.filter(id => id !== targetId) });
+            await updateNote(centerId, { linksTo: center.linksTo.filter(id => id !== targetId) as string[] });
         }
         // Remove if Parent
         if (target.linksTo.includes(centerId)) {
-            await updateNote(targetId, { linksTo: target.linksTo.filter(id => id !== centerId) });
+            await updateNote(targetId, { linksTo: target.linksTo.filter(id => id !== centerId) as string[] });
         }
         // Remove if Related
         if (center.relatedTo.includes(targetId)) {
-            await updateNote(centerId, { relatedTo: center.relatedTo.filter(id => id !== targetId) });
+            await updateNote(centerId, { relatedTo: center.relatedTo.filter(id => id !== targetId) as string[] });
         }
         if (target.relatedTo.includes(centerId)) {
-            await updateNote(targetId, { relatedTo: target.relatedTo.filter(id => id !== targetId) });
+            await updateNote(targetId, { relatedTo: target.relatedTo.filter(id => id !== targetId) as string[] });
         }
       };
 
@@ -516,20 +562,20 @@ function App() {
 
         // 1. Remove if Child (remove target from center.linksTo)
         if (center.linksTo.includes(targetId)) {
-            await updateNote(centerId, { linksTo: center.linksTo.filter(id => id !== targetId) });
+            await updateNote(centerId, { linksTo: center.linksTo.filter(id => id !== targetId) as string[] });
         }
         
         // 2. Remove if Parent (remove center from target.linksTo)
         if (target.linksTo.includes(centerId)) {
-            await updateNote(targetId, { linksTo: target.linksTo.filter(id => id !== centerId) });
+            await updateNote(targetId, { linksTo: target.linksTo.filter(id => id !== centerId) as string[] });
         }
 
         // 3. Remove if Related (remove from both relatedTo)
         if (center.relatedTo.includes(targetId)) {
-            await updateNote(centerId, { relatedTo: center.relatedTo.filter(id => id !== targetId) });
+            await updateNote(centerId, { relatedTo: center.relatedTo.filter(id => id !== targetId) as string[] });
         }
         if (target.relatedTo.includes(centerId)) {
-            await updateNote(targetId, { relatedTo: target.relatedTo.filter(id => id !== targetId) });
+            await updateNote(targetId, { relatedTo: target.relatedTo.filter(id => id !== targetId) as string[] });
         }
     };
     
@@ -662,15 +708,15 @@ function App() {
             setShowMainMenu(false);
             closed = true;
         }
-        // Clear selection
-        if (selectedNoteIds.size > 0) {
+        // Clear selection via ref
+        if (selectedNoteIdsRef.current.size > 0) {
             setSelectedNoteIds(new Set());
             closed = true;
         }
 
         if (closed) {
             // Only reset focus if we weren't just clearing selection
-            if (selectedNoteIds.size === 0) {
+            if (selectedNoteIdsRef.current.size === 0) {
                 setFocusedSection('center');
                 setFocusedIndex(0);
             }
@@ -695,32 +741,34 @@ function App() {
         return;
     }
 
-    // Toggle Selection (x)
+    // Toggle Selection (x) with Auto-Advance
     if (e.key === 'x') {
         e.preventDefault();
         const note = getFocusedNote();
         if (note && note.id !== centralNoteId) {
             handleToggleSelection(note.id);
+            // Automatically move to the next note for rapid selection
+            const notes = getSortedNotes(focusedSection);
+            if (focusedIndex < notes.length - 1) {
+                setFocusedIndex(prev => prev + 1);
+            }
         }
         return;
     }
 
     // Completely Delete Note
     if (e.ctrlKey && e.key === 'Backspace') {
-        const note = getFocusedNote();
-        if (note) {
-            e.preventDefault();
-            // Shortcut deletion (no confirm)
-            await performDelete(note);
-        }
+        e.preventDefault();
+        // Delegate to unified delete handler
+        await handleDeleteAction();
         return;
     }
 
     // Unlink Note (Standard Backspace)
     if (e.key === 'Backspace') {
       e.preventDefault();
-      // Handle Multi-select Unlink
-      if (selectedNoteIds.size > 0) {
+      // Handle Multi-select Unlink via ref
+      if (selectedNoteIdsRef.current.size > 0) {
           await changeRelationship('unlink');
           return;
       }
@@ -734,10 +782,10 @@ function App() {
     }
 
     if (e.ctrlKey) {
-        // Multi-select Move or Linker
+        // Multi-select Move or Linker via ref
         if (e.key === 'ArrowUp') {
             e.preventDefault();
-            if (selectedNoteIds.size > 0) {
+            if (selectedNoteIdsRef.current.size > 0) {
                 await changeRelationship('up');
             } else {
                 setLinkerType('up');
@@ -747,7 +795,7 @@ function App() {
         }
         if (e.key === 'ArrowDown') {
             e.preventDefault();
-            if (selectedNoteIds.size > 0) {
+            if (selectedNoteIdsRef.current.size > 0) {
                 await changeRelationship('down');
             } else {
                 setLinkerType('down');
@@ -757,7 +805,7 @@ function App() {
         }
         if (e.key === 'ArrowLeft') {
             e.preventDefault();
-            if (selectedNoteIds.size > 0) {
+            if (selectedNoteIdsRef.current.size > 0) {
                 await changeRelationship('left');
             } else {
                 setLinkerType('left');
@@ -1048,7 +1096,7 @@ function App() {
         }
     }
 
-  }, [focusedSection, focusedIndex, topology, favorites, centralNoteId, renameModalOpen, isSearchActive, editorOpen, linkerOpen, settingsOpen, fontSize, sectionIndices, getFocusedNote, getSortedNotes, showFavDropdown, showMainMenu, selectedNoteIds, showFavorites, showContent]);
+  }, [focusedSection, focusedIndex, topology, favorites, centralNoteId, renameModalOpen, isSearchActive, editorOpen, linkerOpen, settingsOpen, fontSize, sectionIndices, getFocusedNote, getSortedNotes, showFavDropdown, showMainMenu, selectedNoteIds, showFavorites, showContent, handleDeleteAction]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleGlobalKeyDown as any);
@@ -1061,7 +1109,7 @@ function App() {
     notes: Note[], 
     section: Section, 
     containerClasses: string, 
-    itemClasses: string,
+    itemClasses: string, 
     containerId?: string
   ) => {
     // Sort notes alphabetically by title
@@ -1310,7 +1358,7 @@ function App() {
                 </button>
                 <button 
                     type="button" 
-                    onClick={handleDeleteFocusedNote} 
+                    onClick={handleDeleteAction} 
                     title="Delete Note (Ctrl+Backspace)" 
                     className="p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
                     style={{ color: 'var(--theme-accent)' }}
@@ -1432,7 +1480,7 @@ function App() {
                     
                     {/* Related (Top Left) */}
                     <div className={`${showFavorites ? 'flex-1' : 'h-full'} relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0`}>
-                        <div className={labelStyle} style={{ fontSize: `${Math.max(8, fontSize - 10)}px` }}>Related</div>
+                        <div className={labelStyle} style={{ fontSize: `${Math.max(10, fontSize - 10)}px` }}>Related</div>
                         {renderSection(
                             topology.lefters, 
                             'left', 
@@ -1445,7 +1493,7 @@ function App() {
                     {/* Favorites (Bottom Left) - Conditional */}
                     {showFavorites && (
                         <div className="flex-1 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
-                            <div className={labelStyle} style={{ fontSize: `${Math.max(8, fontSize - 10)}px` }}>Favorites</div>
+                            <div className={labelStyle} style={{ fontSize: `${Math.max(10, fontSize - 10)}px` }}>Favorites</div>
                             {renderSection(
                                 favorites, 
                                 'favs', 
@@ -1465,7 +1513,7 @@ function App() {
                         
                         {/* Parents (35% of column ~ 70% of wrapper) */}
                         <div className="flex-[7] relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
-                             <div className={labelStyle} style={{ fontSize: `${Math.max(8, fontSize - 10)}px` }}>Parents</div>
+                             <div className={labelStyle} style={{ fontSize: `${Math.max(10, fontSize - 10)}px` }}>Parents</div>
                              <div className="absolute inset-0 overflow-x-auto overflow-y-hidden custom-scrollbar rounded-3xl pt-6">
                                 {renderSection(
                                     topology.uppers, 
@@ -1479,7 +1527,7 @@ function App() {
 
                         {/* Active Note (15% of column ~ 30% of wrapper) */}
                         <div className="flex-[3] relative flex items-center justify-center p-4 z-10 bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
-                            <div className={labelStyle} style={{ fontSize: `${Math.max(8, fontSize - 10)}px` }}>Active Note</div>
+                            <div className={labelStyle} style={{ fontSize: `${Math.max(10, fontSize - 10)}px` }}>Active Note</div>
                             {topology.center && (
                                 <>
                                     <NoteCard
@@ -1505,7 +1553,7 @@ function App() {
 
                     {/* Children (Bot Center - 50%) */}
                     <div className="flex-1 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
-                        <div className={labelStyle} style={{ fontSize: `${Math.max(8, fontSize - 10)}px` }}>Children</div>
+                        <div className={labelStyle} style={{ fontSize: `${Math.max(10, fontSize - 10)}px` }}>Children</div>
                         <div className="absolute inset-0 overflow-x-auto overflow-y-hidden custom-scrollbar rounded-3xl pt-6">
                             {renderSection(
                                 topology.downers, 
@@ -1523,7 +1571,7 @@ function App() {
                     
                     {/* Siblings (Top Right) */}
                     <div className={`${showContent ? 'flex-1' : 'h-full'} relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0`}>
-                        <div className={labelStyle} style={{ fontSize: `${Math.max(8, fontSize - 10)}px` }}>Siblings</div>
+                        <div className={labelStyle} style={{ fontSize: `${Math.max(10, fontSize - 10)}px` }}>Siblings</div>
                          {renderSection(
                             topology.righters, 
                             'right', 
@@ -1540,7 +1588,7 @@ function App() {
                             className={`flex-1 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0 outline-none ${focusedSection === 'content' ? 'ring-2 ring-[var(--theme-accent)]' : ''}`}
                             tabIndex={-1}
                         >
-                             <div className={labelStyle} style={{ fontSize: `${Math.max(8, fontSize - 10)}px` }}>Content</div>
+                             <div className={labelStyle} style={{ fontSize: `${Math.max(10, fontSize - 10)}px` }}>Content</div>
                              <div 
                                 className="absolute inset-0 p-6 overflow-auto custom-scrollbar prose dark:prose-invert max-w-none rounded-3xl pt-8"
                                 dangerouslySetInnerHTML={{ __html: previewHtml }}
@@ -1555,7 +1603,7 @@ function App() {
         {/* --- Footer / Status Bar --- */}
         <div style={{ fontSize: `${uiFontSize}px` }} className="h-8 flex-shrink-0 bg-[var(--theme-bars)] flex items-center justify-between px-4 text-foreground z-50 transition-colors duration-300">
             <div className="flex-shrink-0 opacity-90">
-                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.2.2
+                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.2.5
             </div>
             <div className="opacity-60 truncate ml-4 text-right">
                 Arrows: Nav | Space: Recenter | Enter: Focus | Shift+Enter: Edit | Ctrl+Arrows: Link | F2: Rename | Bksp: Unlink

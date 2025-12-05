@@ -2,6 +2,27 @@
 
 All notable changes to the JaRoet PKM project will be documented in this file.
 
+## [0.2.5] - 2024-05-23
+
+### Changed
+- **Delete Function Redesign:** The delete functionality has been completely overhauled to handle selections more strictly.
+  - If notes are **selected** (via 'x'), the delete action will *only* delete the selected notes and will ignore the currently focused note (unless it is also in the selection).
+  - If **no notes are selected**, the delete action will default to deleting the currently focused note.
+  - Added explicit confirmation dialogs for both bulk and single delete actions to prevent accidental data loss.
+- **Version:** Bumped version number to 0.2.5.
+
+## [0.2.4] - 2024-05-23
+
+### Changed
+- **UI Adjustment:** Increased the minimum font size for section labels from 8px to 10px to improve legibility.
+- **Version:** Bumped version number to 0.2.4.
+
+## [0.2.3] - 2024-05-23
+
+### Changed
+- **Bug Fix:** Fixed an issue where deleting multiple selected notes would fail silently or only delete the focused note. This was resolved by using a `useRef` to track selection state, ensuring event handlers always access the most up-to-date selection list.
+- **Selection Workflow:** The 'x' key now automatically advances focus to the next note in the list after toggling selection, allowing for rapid sequential multi-selection.
+
 ## [0.2.2] - 2024-05-23
 
 ### Added
