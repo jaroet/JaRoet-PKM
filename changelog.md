@@ -2,19 +2,39 @@
 
 All notable changes to the JaRoet PKM project will be documented in this file.
 
-## [0.2.0] - 2024-05-23
-
-### Release Notes
-Initial public beta release. Consolidated all rapid iteration patches (0.1.1 - 0.1.5) into this milestone. This version establishes the core topology features, external link handling, UI refinements, and distribution pipeline.
-
-### Added
-- **External Link Icons:** Links in markdown now show an "open in new tab" icon.
-- **Changelog:** Project update tracking.
-- **Distribution:** Standalone `dist/index.html` tracking via `.gitignore` updates.
-- **Status Bar:** Added version number display.
+## [0.1.6] - 2024-05-23
 
 ### Changed
-- **UI Polishing:** Adjusted section label positioning (finalized at 5px offset) for optimal aesthetics and nesting.
-- **Branding:** Renamed application to "JaRoet PKM".
-- **Link Behavior:** External links now securely open in new tabs (`_blank`).
-- **Data Safety:** Enhanced git tracking rules for distribution builds.
+- **UI Adjustment:** Reduced section label font size to 10px to reduce visual noise.
+- **Version:** Bumped version number to 0.1.6.
+
+## [0.1.5] - 2024-05-23
+
+### Changed
+- **UI Adjustment:** Raised section labels to sit 5px above the section border for better visibility.
+- **Version:** Bumped version number to 0.1.5.
+
+## [0.1.4] - 2024-05-23
+
+### Changed
+- **UI Adjustment:** Lowered the section labels ("Related", "Parents", "Active Note", etc.) so they sit lower on the border line (offset -2px from top), creating a cleaner nested appearance.
+- **Version:** Bumped version number to 0.1.4.
+
+## [0.1.3] - 2024-05-23
+
+### Changed
+- **Git Tracking:** Added `.gitignore` configuration to ensure the standalone `dist/index.html` file is properly tracked in version control.
+- **Version:** Bumped version number to 0.1.3.
+
+## [0.1.2] - 2024-05-23
+
+### Added
+- **External Link Icons:** Links in the markdown editor and content preview that point to external websites now display a small "open in new tab" icon. This helps distinguish them from internal note links.
+- **Changelog:** Started tracking project updates in this file.
+
+## [0.1.1] - 2024-05-23
+
+### Changed
+- **App Title:** Renamed the application header and browser tab title from "NexusNode PKM" to "JaRoet PKM".
+- **Status Bar:** Added version number display to the status bar.
+- **Link Behavior:** Configured external links to open in a new browser tab by default.

@@ -1045,7 +1045,8 @@ function App() {
   
   // Updated style: use text-[color-mix(in srgb, var(--theme-accent) 50%, transparent)] (50% dimmed accent)
   // Position change: -top-[5px] to position label higher (5px overlap)
-  const labelStyle = "absolute -top-[5px] left-6 px-3 py-0.5 text-xs font-bold tracking-wider bg-[var(--theme-section)] text-[color-mix(in_srgb,var(--theme-accent)_50%,transparent)] select-none z-20 pointer-events-none rounded-full border border-black/10 dark:border-white/10 uppercase";
+  // Font Size change: text-[10px] to make labels smaller
+  const labelStyle = "absolute -top-[5px] left-6 px-3 py-0.5 text-[10px] font-bold tracking-wider bg-[var(--theme-section)] text-[color-mix(in_srgb,var(--theme-accent)_50%,transparent)] select-none z-20 pointer-events-none rounded-full border border-black/10 dark:border-white/10 uppercase";
 
   // Calculate UI font size (4 points smaller than note font size, minimum 14px)
   const uiFontSize = Math.max(14, fontSize - 4);
@@ -1485,7 +1486,7 @@ function App() {
         {/* --- Footer / Status Bar --- */}
         <div style={{ fontSize: `${uiFontSize}px` }} className="h-8 flex-shrink-0 bg-[var(--theme-bars)] flex items-center justify-between px-4 text-foreground z-50 transition-colors duration-300">
             <div className="flex-shrink-0 opacity-90">
-                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} | Version: 0.2.0
+                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} | Version: 0.1.6
             </div>
             <div className="opacity-60 truncate ml-4 text-right">
                 Arrows: Nav | Space: Recenter | Enter: Focus | Shift+Enter: Edit | Ctrl+Arrows: Link | F2: Rename | Bksp: Unlink
