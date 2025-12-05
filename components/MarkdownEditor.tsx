@@ -41,7 +41,11 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, onClose, 
   useEffect(() => {
     const parse = async () => {
         try {
-            const html = await marked.parse(content || '', { breaks: true, gfm: true });
+            const renderer = new marked.Renderer();
+            renderer.link = (href, title, text) => {
+                return `<a target="_blank" rel="noopener noreferrer" href="${href}" title="${title || ''}">${text}</a>`;
+            };
+            const html = await marked.parse(content || '', { renderer, breaks: true, gfm: true });
             setParsedHtml(html);
         } catch (e) {
             console.error('Markdown parse error:', e);
@@ -97,9 +101,9 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, onClose, 
         // Use -1 so it doesn't trap tab focus but can catch bubbles
         tabIndex={-1} 
         onKeyDown={handleKeyDown}
-        className="w-full max-w-4xl h-[80vh] bg-background rounded-lg shadow-2xl flex flex-col border border-gray-200 dark:border-gray-800 outline-none"
+        className="w-full max-w-[90vw] h-[90vh] bg-[var(--theme-bg)] rounded-lg shadow-2xl flex flex-col border border-gray-200 dark:border-gray-800 outline-none"
       >
-        <div className="flex justify-between items-center p-4 border-b dark:border-gray-700">
+        <div className="flex justify-between items-center p-4 border-b dark:border-gray-700 bg-background/50 rounded-t-lg">
           <h2 className="text-xl font-bold truncate pr-4">{note.title}</h2>
           <div className="flex gap-2 flex-shrink-0">
             <button
@@ -129,7 +133,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, onClose, 
           </div>
         </div>
         
-        <div className="flex-1 overflow-hidden relative">
+        <div className="flex-1 overflow-hidden relative bg-background/50">
             {isPreview ? (
                 <div 
                     ref={previewRef}
@@ -147,7 +151,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, onClose, 
                 />
             )}
         </div>
-        <div className="p-2 text-xs text-gray-500 border-t dark:border-gray-700 text-center">
+        <div className="p-2 text-xs text-gray-500 border-t dark:border-gray-700 text-center bg-background/50 rounded-b-lg">
             {isPreview 
                 ? 'View Mode • Ctrl+E to Edit • Esc to Close' 
                 : 'Edit Mode • Ctrl+E to Save & Preview • Ctrl+Enter to Save & Close • Esc to Cancel'

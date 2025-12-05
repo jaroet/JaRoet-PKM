@@ -145,7 +145,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, currentC
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="w-full max-w-md bg-background rounded-xl shadow-2xl border border-gray-200 dark:border-gray-800 flex flex-col max-h-[90vh]">
+      <div className="w-full max-w-4xl h-[85vh] bg-background rounded-xl shadow-2xl border border-gray-200 dark:border-gray-800 flex flex-col">
         {/* Header */}
         <div className="flex justify-between items-center p-6 pb-2">
             <h2 className="text-xl font-bold">Settings</h2>

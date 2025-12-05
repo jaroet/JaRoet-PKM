@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { marked } from 'marked';
 import { db, getTopology, createNote, updateNote, deleteNote, getFavorites, toggleFavorite, seedDatabase, getNote, getAllNotes, importNotes, getHomeNoteId, searchNotes, getFontSize, getNoteCount, getVaultList, getCurrentVaultName, switchVault, getAppTheme, AppTheme } from './services/db';
 import { Note, Section, Topology, SearchResult } from './types';
 import NoteCard from './components/NoteCard';
@@ -29,7 +30,10 @@ function App() {
   const [focusedSection, setFocusedSection] = useState<Section>('center');
   const [focusedIndex, setFocusedIndex] = useState(0);
   // Remember last index for each section
-  const [sectionIndices, setSectionIndices] = useState({ up: 0, down: 0, left: 0, right: 0 });
+  const [sectionIndices, setSectionIndices] = useState({ up: 0, down: 0, left: 0, right: 0, favs: 0 });
+
+  // Selection State
+  const [selectedNoteIds, setSelectedNoteIds] = useState<Set<string>>(new Set());
 
   // Modals & UI State
   const [showMainMenu, setShowMainMenu] = useState(false);
@@ -50,9 +54,13 @@ function App() {
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   
+  // Content Preview State
+  const [previewHtml, setPreviewHtml] = useState('');
+  
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchResultsRef = useRef<HTMLDivElement>(null);
   const mainContainerRef = useRef<HTMLDivElement>(null);
+  const contentPreviewRef = useRef<HTMLDivElement>(null);
 
   // --- Initialization ---
 
@@ -76,6 +84,9 @@ function App() {
             mainContainerRef.current.focus();
         }
       }, 100);
+
+      // Set Document Title
+      document.title = `NexusNode PKM - ${getCurrentVaultName()}`;
     };
     init();
   }, []);
@@ -127,32 +138,39 @@ function App() {
       setFocusedSection('center');
       setFocusedIndex(0);
       // Reset section memory when central note changes
-      setSectionIndices({ up: 0, down: 0, left: 0, right: 0 });
+      setSectionIndices({ up: 0, down: 0, left: 0, right: 0, favs: 0 });
+      // Clear selection on navigation
+      setSelectedNoteIds(new Set());
       updateTotalCount();
     }
   }, [centralNoteId]);
 
   // Track indices when moving inside a section
   useEffect(() => {
-    if (focusedSection !== 'center') {
+    if (focusedSection !== 'center' && focusedSection !== 'content') {
       setSectionIndices(prev => ({ ...prev, [focusedSection]: focusedIndex }));
     }
   }, [focusedIndex, focusedSection]);
 
   // --- Scroll Into View Logic ---
   useEffect(() => {
-    if (focusedSection === 'center') return;
+    if (focusedSection === 'center' || focusedSection === 'content') return;
     
     // Find the currently focused note element by its ID
     const elementId = `note-${focusedSection}-${focusedIndex}`;
     const el = document.getElementById(elementId);
     
     if (el) {
-        // block: 'nearest' ensures vertical visibility without jumping
-        // inline: 'nearest' ensures horizontal visibility for the flex-wrap columns
         el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
     }
   }, [focusedSection, focusedIndex]);
+
+  // Focus Content Preview if selected
+  useEffect(() => {
+      if (focusedSection === 'content' && contentPreviewRef.current) {
+          contentPreviewRef.current.focus();
+      }
+  }, [focusedSection]);
 
   // --- Search Effect ---
   useEffect(() => {
@@ -204,20 +222,49 @@ function App() {
       if (section === 'down') notes = topology.downers;
       if (section === 'left') notes = topology.lefters;
       if (section === 'right') notes = topology.righters;
+      if (section === 'favs') notes = favorites;
       
       return [...notes].sort((a, b) => a.title.localeCompare(b.title));
-  }, [topology]);
+  }, [topology, favorites]);
 
   const getFocusedNote = useCallback((): Note | null => {
+    if (focusedSection === 'content') return topology.center;
     if (focusedSection === 'center') return topology.center;
     const notes = getSortedNotes(focusedSection);
     return notes[focusedIndex] || null;
   }, [focusedSection, focusedIndex, getSortedNotes, topology]);
 
-  // --- Focus Integrity (Clamping) ---
-  // If notes are deleted or list shrinks, clamp focus index to stay valid
+  // --- Markdown Preview Effect ---
   useEffect(() => {
-    if (focusedSection === 'center') return;
+      const updatePreview = async () => {
+          const target = getFocusedNote() || topology.center;
+          
+          if (target && target.content) {
+              try {
+                // Configure renderer to open links in new tab
+                const renderer = new marked.Renderer();
+                renderer.link = (href, title, text) => {
+                    return `<a target="_blank" rel="noopener noreferrer" href="${href}" title="${title || ''}">${text}</a>`;
+                };
+
+                const html = await marked.parse(target.content, { renderer, breaks: true, gfm: true });
+                setPreviewHtml(html);
+              } catch {
+                setPreviewHtml('<p class="text-red-500">Error rendering markdown</p>');
+              }
+          } else {
+              setPreviewHtml('<p class="text-gray-500 italic">No content</p>');
+          }
+      };
+      
+      const t = setTimeout(updatePreview, 100);
+      return () => clearTimeout(t);
+  }, [focusedSection, focusedIndex, topology, favorites]);
+
+
+  // --- Focus Integrity (Clamping) ---
+  useEffect(() => {
+    if (focusedSection === 'center' || focusedSection === 'content') return;
     
     const notes = getSortedNotes(focusedSection);
     // If section is empty but we are focused on it, move to center
@@ -231,7 +278,7 @@ function App() {
     if (focusedIndex >= notes.length) {
         setFocusedIndex(notes.length - 1);
     }
-  }, [topology, focusedSection, focusedIndex, getSortedNotes]);
+  }, [topology, favorites, focusedSection, focusedIndex, getSortedNotes]);
 
 
   // --- Actions ---
@@ -275,9 +322,9 @@ function App() {
             goHome(); // This will fallback to first available if home is gone
         } else {
             // We deleted a peripheral note, just refresh topology
-            // Focus clamping useEffect will handle UI focus update
             if (centralNoteId) loadTopology(centralNoteId);
         }
+        refreshFavorites(); // In case we deleted a favorite
         updateTotalCount();
   };
 
@@ -285,7 +332,6 @@ function App() {
     if (e) e.preventDefault();
     const note = getFocusedNote();
     if (note) {
-        // No confirmation needed to match CTRL-backspace behavior
         await performDelete(note);
     }
   };
@@ -312,33 +358,146 @@ function App() {
     }
   };
 
+  // --- Relationship Management Logic ---
+
+  const getSelectedOrFocusedNotes = (): string[] => {
+      if (selectedNoteIds.size > 0) {
+          return Array.from(selectedNoteIds);
+      }
+      const active = getFocusedNote();
+      return active ? [active.id] : [];
+  };
+
+  const changeRelationship = async (type: 'up' | 'down' | 'left' | 'unlink') => {
+      if (!centralNoteId) return;
+
+      const targetIds = getSelectedOrFocusedNotes();
+      if (targetIds.length === 0) return;
+
+      // Filter out Active Note and Content Preview to prevent self-linking errors
+      const validTargets = targetIds.filter(id => id !== centralNoteId);
+      if (validTargets.length === 0) return;
+
+      // Helper to clean links
+      const cleanRelationships = async (centerId: string, targetId: string) => {
+        const center = await getNote(centerId);
+        const target = await getNote(targetId);
+        if (!center || !target) return;
+
+        // Remove if Child
+        if (center.linksTo.includes(targetId)) {
+            await updateNote(centerId, { linksTo: center.linksTo.filter(id => id !== targetId) });
+        }
+        // Remove if Parent
+        if (target.linksTo.includes(centerId)) {
+            await updateNote(targetId, { linksTo: target.linksTo.filter(id => id !== centerId) });
+        }
+        // Remove if Related
+        if (center.relatedTo.includes(targetId)) {
+            await updateNote(centerId, { relatedTo: center.relatedTo.filter(id => id !== targetId) });
+        }
+        if (target.relatedTo.includes(centerId)) {
+            await updateNote(targetId, { relatedTo: target.relatedTo.filter(id => id !== centerId) });
+        }
+      };
+
+      for (const id of validTargets) {
+          await cleanRelationships(centralNoteId, id);
+
+          if (type === 'up') {
+            // Target becomes Parent of Center
+            const target = await getNote(id);
+            if (target) {
+                await updateNote(id, { linksTo: [...target.linksTo, centralNoteId] });
+            }
+          } else if (type === 'down') {
+            // Target becomes Child of Center
+            const center = await getNote(centralNoteId);
+            if (center) {
+                await updateNote(centralNoteId, { linksTo: [...center.linksTo, id] });
+            }
+          } else if (type === 'left') {
+            // Bi-directional Related
+            const center = await getNote(centralNoteId);
+            if (center) await updateNote(centralNoteId, { relatedTo: [...center.relatedTo, id] });
+            
+            const target = await getNote(id);
+            if (target) await updateNote(id, { relatedTo: [...target.relatedTo, centralNoteId] });
+          }
+      }
+
+      loadTopology(centralNoteId);
+      // Clear selection after move/unlink
+      setSelectedNoteIds(new Set());
+  };
+
+  const handleToggleSelection = (noteId: string) => {
+      if (noteId === centralNoteId) return; // Cannot select active note
+      setSelectedNoteIds(prev => {
+          const next = new Set(prev);
+          if (next.has(noteId)) {
+              next.delete(noteId);
+          } else {
+              next.add(noteId);
+          }
+          return next;
+      });
+  };
+
   const handleLinkerSelect = async (targetId: string | null, newTitle?: string) => {
     if (!centralNoteId) return;
+
+    // Helper: Remove any existing relationship between center and target to enforce exclusivity
+    const cleanRelationships = async (centerId: string, targetId: string) => {
+        const center = await getNote(centerId);
+        const target = await getNote(targetId);
+        if (!center || !target) return;
+
+        // 1. Remove if Child (remove target from center.linksTo)
+        if (center.linksTo.includes(targetId)) {
+            await updateNote(centerId, { linksTo: center.linksTo.filter(id => id !== targetId) });
+        }
+        
+        // 2. Remove if Parent (remove center from target.linksTo)
+        if (target.linksTo.includes(centerId)) {
+            await updateNote(targetId, { linksTo: target.linksTo.filter(id => id !== centerId) });
+        }
+
+        // 3. Remove if Related (remove from both relatedTo)
+        if (center.relatedTo.includes(targetId)) {
+            await updateNote(centerId, { relatedTo: center.relatedTo.filter(id => id !== targetId) });
+        }
+        if (target.relatedTo.includes(centerId)) {
+            await updateNote(targetId, { relatedTo: target.relatedTo.filter(id => id !== centerId) });
+        }
+    };
     
     // Helper function to perform the linking logic
     const linkToTarget = async (id: string) => {
+        // First ensure no conflicting relationship exists
+        await cleanRelationships(centralNoteId, id);
+
         if (linkerType === 'up') {
+            // Target becomes Parent of Center
             const target = await getNote(id);
-            if (target && !target.linksTo.includes(centralNoteId)) {
+            if (target) {
                 await updateNote(id, { linksTo: [...target.linksTo, centralNoteId] });
             }
         } else if (linkerType === 'down') {
-            const center = await getNote(centralNoteId); // Refresh center from DB
-            if (center && !center.linksTo.includes(id)) {
+            // Target becomes Child of Center
+            const center = await getNote(centralNoteId);
+            if (center) {
                 await updateNote(centralNoteId, { linksTo: [...center.linksTo, id] });
             }
         } else if (linkerType === 'left') {
             // Bi-directional linking for Lateral (Related) nodes
             const center = await getNote(centralNoteId);
-            
-            // 1. Add Target to Center
-            if (center && !center.relatedTo.includes(id)) {
+            if (center) {
                 await updateNote(centralNoteId, { relatedTo: [...center.relatedTo, id] });
             }
     
-            // 2. Add Center to Target
             const target = await getNote(id);
-            if (target && !target.relatedTo.includes(centralNoteId)) {
+            if (target) {
                 await updateNote(id, { relatedTo: [...target.relatedTo, centralNoteId] });
             }
         }
@@ -442,10 +601,18 @@ function App() {
             setShowMainMenu(false);
             closed = true;
         }
+        // Clear selection
+        if (selectedNoteIds.size > 0) {
+            setSelectedNoteIds(new Set());
+            closed = true;
+        }
 
         if (closed) {
-            setFocusedSection('center');
-            setFocusedIndex(0);
+            // Only reset focus if we weren't just clearing selection
+            if (selectedNoteIds.size === 0) {
+                setFocusedSection('center');
+                setFocusedIndex(0);
+            }
             e.preventDefault();
             return;
         }
@@ -458,6 +625,16 @@ function App() {
       setIsSearchActive(true);
       setTimeout(() => searchInputRef.current?.focus(), 50);
       return;
+    }
+
+    // Toggle Selection (x)
+    if (e.key === 'x') {
+        e.preventDefault();
+        const note = getFocusedNote();
+        if (note && note.id !== centralNoteId) {
+            handleToggleSelection(note.id);
+        }
+        return;
     }
 
     // Completely Delete Note
@@ -473,53 +650,51 @@ function App() {
 
     // Unlink Note (Standard Backspace)
     if (e.key === 'Backspace') {
+      e.preventDefault();
+      // Handle Multi-select Unlink
+      if (selectedNoteIds.size > 0) {
+          await changeRelationship('unlink');
+          return;
+      }
+      // Single note unlink
       const note = getFocusedNote();
-      if (note && centralNoteId && focusedSection !== 'center' && focusedSection !== 'right') {
-        e.preventDefault();
-        
-        if (focusedSection === 'up') {
-            const newLinks = note.linksTo.filter(id => id !== centralNoteId);
-            await updateNote(note.id, { linksTo: newLinks });
-        } else if (focusedSection === 'down') {
-            if (topology.center) {
-                const newLinks = topology.center.linksTo.filter(id => id !== note.id);
-                await updateNote(centralNoteId, { linksTo: newLinks });
-            }
-        } else if (focusedSection === 'left') {
-            // Remove Note from Center
-            if (topology.center) {
-                const newRelated = topology.center.relatedTo.filter(id => id !== note.id);
-                await updateNote(centralNoteId, { relatedTo: newRelated });
-            }
-            // Remove Center from Note (Bidirectional cleanup)
-            const noteData = await getNote(note.id);
-            if (noteData) {
-                 const newRelated = noteData.relatedTo.filter(id => id !== centralNoteId);
-                 await updateNote(note.id, { relatedTo: newRelated });
-            }
-        }
+      if (note && centralNoteId && focusedSection !== 'center' && focusedSection !== 'right' && focusedSection !== 'favs' && focusedSection !== 'content') {
+        await changeRelationship('unlink');
         loadTopology(centralNoteId);
       }
       return;
     }
 
     if (e.ctrlKey) {
+        // Multi-select Move or Linker
         if (e.key === 'ArrowUp') {
             e.preventDefault();
-            setLinkerType('up');
-            setLinkerOpen(true);
+            if (selectedNoteIds.size > 0) {
+                await changeRelationship('up');
+            } else {
+                setLinkerType('up');
+                setLinkerOpen(true);
+            }
             return;
         }
         if (e.key === 'ArrowDown') {
             e.preventDefault();
-            setLinkerType('down');
-            setLinkerOpen(true);
+            if (selectedNoteIds.size > 0) {
+                await changeRelationship('down');
+            } else {
+                setLinkerType('down');
+                setLinkerOpen(true);
+            }
             return;
         }
         if (e.key === 'ArrowLeft') {
             e.preventDefault();
-            setLinkerType('left');
-            setLinkerOpen(true);
+            if (selectedNoteIds.size > 0) {
+                await changeRelationship('left');
+            } else {
+                setLinkerType('left');
+                setLinkerOpen(true);
+            }
             return;
         }
     }
@@ -581,10 +756,44 @@ function App() {
 
     if (e.key === 'ArrowUp') {
         e.preventDefault();
+        
+        // --- Range Selection (Shift+Up) ---
+        if (e.shiftKey && ['up', 'down', 'left', 'right', 'favs'].includes(focusedSection)) {
+             const notes = getSortedNotes(focusedSection);
+             if (notes.length === 0) return;
+
+             // Ensure current is selected if starting fresh
+             if (selectedNoteIds.size === 0) {
+                 const current = notes[focusedIndex];
+                 if (current) handleToggleSelection(current.id);
+             }
+
+             if (focusedIndex > 0) {
+                 const newIndex = focusedIndex - 1;
+                 setFocusedIndex(newIndex);
+                 const target = notes[newIndex];
+                 if (target) {
+                     setSelectedNoteIds(prev => {
+                         const next = new Set(prev);
+                         next.add(target.id); 
+                         return next;
+                     });
+                 }
+             }
+             return;
+        }
+
+        if (focusedSection === 'content') {
+             // Scroll up in content or move to section above?
+             // Since "Keyboard centric", let's move to Right section (Siblings)
+             setFocusedSection('right');
+             setFocusedIndex(Math.min(sectionIndices.right, topology.righters.length - 1));
+             return;
+        }
+
         if (focusedSection === 'center') {
             if (topology.uppers.length > 0) {
                 setFocusedSection('up');
-                // Restore previous index, ensuring it's within bounds
                 const target = Math.min(sectionIndices.up, topology.uppers.length - 1);
                 setFocusedIndex(target);
             }
@@ -594,15 +803,54 @@ function App() {
              } else {
                  setFocusedIndex(prev => Math.max(0, prev - 1));
              }
+        } else if (focusedSection === 'favs') {
+            if (focusedIndex === 0) {
+                setFocusedSection('left');
+                const target = Math.min(sectionIndices.left, topology.lefters.length - 1);
+                setFocusedIndex(target);
+            } else {
+                setFocusedIndex(prev => Math.max(0, prev - 1));
+            }
         } else {
             setFocusedIndex(prev => Math.max(0, prev - 1));
         }
     } else if (e.key === 'ArrowDown') {
         e.preventDefault();
+
+        // --- Range Selection (Shift+Down) ---
+        if (e.shiftKey && ['up', 'down', 'left', 'right', 'favs'].includes(focusedSection)) {
+             const notes = getSortedNotes(focusedSection);
+             if (notes.length === 0) return;
+
+             // Ensure current is selected if starting fresh
+             if (selectedNoteIds.size === 0) {
+                 const current = notes[focusedIndex];
+                 if (current) handleToggleSelection(current.id);
+             }
+
+             if (focusedIndex < notes.length - 1) {
+                 const newIndex = focusedIndex + 1;
+                 setFocusedIndex(newIndex);
+                 const target = notes[newIndex];
+                 if (target) {
+                     setSelectedNoteIds(prev => {
+                         const next = new Set(prev);
+                         next.add(target.id);
+                         return next;
+                     });
+                 }
+             }
+             return;
+        }
+        
+        if (focusedSection === 'content') {
+             // Already at bottom
+             return;
+        }
+
         if (focusedSection === 'center') {
              if (topology.downers.length > 0) {
                 setFocusedSection('down');
-                // Restore previous index, ensuring it's within bounds
                 const target = Math.min(sectionIndices.down, topology.downers.length - 1);
                 setFocusedIndex(target);
              }
@@ -613,6 +861,23 @@ function App() {
             } else {
                  setFocusedIndex(prev => Math.min(arr.length - 1, prev + 1));
             }
+        } else if (focusedSection === 'left') {
+             const arr = topology.lefters;
+             if (focusedIndex === arr.length - 1) {
+                 if (favorites.length > 0) {
+                    setFocusedSection('favs');
+                    setFocusedIndex(Math.min(sectionIndices.favs, favorites.length - 1));
+                 }
+             } else {
+                 setFocusedIndex(prev => Math.min(arr.length - 1, prev + 1));
+             }
+        } else if (focusedSection === 'right') {
+             const arr = topology.righters;
+             if (focusedIndex === arr.length - 1) {
+                 setFocusedSection('content');
+             } else {
+                 setFocusedIndex(prev => Math.min(arr.length - 1, prev + 1));
+             }
         } else {
             const arr = getSortedNotes(focusedSection);
             setFocusedIndex(prev => Math.min(arr.length - 1, prev + 1));
@@ -620,18 +885,43 @@ function App() {
     } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
         
+        if (focusedSection === 'content') {
+            // From Content to Children (Down)
+             setFocusedSection('down');
+             setFocusedIndex(Math.min(sectionIndices.down, topology.downers.length - 1));
+             return;
+        }
+
         if (focusedSection === 'center') {
             if (topology.lefters.length > 0) {
                 setFocusedSection('left');
-                // Restore previous index, ensuring it's within bounds
                 const target = Math.min(sectionIndices.left, topology.lefters.length - 1);
                 setFocusedIndex(target);
+            } else if (favorites.length > 0) {
+                 setFocusedSection('favs');
+                 const target = Math.min(sectionIndices.favs, favorites.length - 1);
+                 setFocusedIndex(target);
             }
         } else if (focusedSection === 'right') {
-            setFocusedSection('center');
-        } else if (focusedSection === 'up' || focusedSection === 'down') {
-            // Jump one column left
-            const containerId = focusedSection === 'up' ? 'container-up' : 'container-down';
+             // Siblings -> Parents? Or Center?
+             // Visually Siblings are Right of Parents/Center.
+             setFocusedSection('up'); // Approximate alignment
+             setFocusedIndex(Math.min(sectionIndices.up, topology.uppers.length - 1));
+        } else if (focusedSection === 'down') {
+             // Children -> Favorites?
+             if (favorites.length > 0) {
+                 setFocusedSection('favs');
+                 setFocusedIndex(Math.min(sectionIndices.favs, favorites.length - 1));
+             } else {
+                 setFocusedSection('left');
+                 setFocusedIndex(Math.min(sectionIndices.left, topology.lefters.length - 1));
+             }
+        } else if (focusedSection === 'up') {
+            setFocusedSection('left');
+            setFocusedIndex(Math.min(sectionIndices.left, topology.lefters.length - 1));
+        } else if (focusedSection === 'left' || focusedSection === 'favs') {
+            // Already at left, handle wrapping in columns if needed
+            const containerId = focusedSection === 'left' ? 'container-left' : 'container-favs';
             const itemsPerCol = getItemsPerColumn(containerId);
             
             const newIndex = focusedIndex - itemsPerCol;
@@ -644,20 +934,33 @@ function App() {
     } else if (e.key === 'ArrowRight') {
         e.preventDefault();
         
+        if (focusedSection === 'content') {
+             return;
+        }
+
         if (focusedSection === 'center') {
             if (topology.righters.length > 0) {
                 setFocusedSection('right');
-                // Restore previous index, ensuring it's within bounds
                 const target = Math.min(sectionIndices.right, topology.righters.length - 1);
                 setFocusedIndex(target);
+            } else {
+                setFocusedSection('content');
             }
         } else if (focusedSection === 'left') {
-            setFocusedSection('center');
-        } else if (focusedSection === 'up' || focusedSection === 'down') {
-             // Jump one column right
-            const containerId = focusedSection === 'up' ? 'container-up' : 'container-down';
+            setFocusedSection('up'); // Approximate
+            setFocusedIndex(Math.min(sectionIndices.up, topology.uppers.length - 1));
+        } else if (focusedSection === 'favs') {
+            setFocusedSection('down'); // Approximate
+            setFocusedIndex(Math.min(sectionIndices.down, topology.downers.length - 1));
+        } else if (focusedSection === 'up') {
+             setFocusedSection('right');
+             setFocusedIndex(Math.min(sectionIndices.right, topology.righters.length - 1));
+        } else if (focusedSection === 'down') {
+             setFocusedSection('content');
+        } else if (focusedSection === 'right') {
+            // Column wrap
+            const containerId = 'container-right';
             const itemsPerCol = getItemsPerColumn(containerId);
-            
             const arr = getSortedNotes(focusedSection);
             const newIndex = focusedIndex + itemsPerCol;
             
@@ -669,7 +972,7 @@ function App() {
         }
     }
 
-  }, [focusedSection, focusedIndex, topology, centralNoteId, renameModalOpen, isSearchActive, editorOpen, linkerOpen, settingsOpen, fontSize, sectionIndices, getFocusedNote, getSortedNotes, showFavDropdown, showMainMenu]);
+  }, [focusedSection, focusedIndex, topology, favorites, centralNoteId, renameModalOpen, isSearchActive, editorOpen, linkerOpen, settingsOpen, fontSize, sectionIndices, getFocusedNote, getSortedNotes, showFavDropdown, showMainMenu, selectedNoteIds]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleGlobalKeyDown as any);
@@ -697,8 +1000,13 @@ function App() {
                     note={note}
                     fontSize={fontSize}
                     isFocused={focusedSection === section && focusedIndex === idx}
-                    onClick={() => {
-                        if (note.id !== centralNoteId) setCentralNoteId(note.id);
+                    isSelected={selectedNoteIds.has(note.id)}
+                    onClick={(e) => {
+                        if (e.ctrlKey) {
+                            handleToggleSelection(note.id);
+                        } else {
+                            if (note.id !== centralNoteId) setCentralNoteId(note.id);
+                        }
                     }}
                     className={itemClasses}
                 />
@@ -707,13 +1015,18 @@ function App() {
     );
   };
   
-  const labelStyle = "absolute -top-3 left-6 px-3 py-0.5 text-xs font-bold tracking-wider text-foreground bg-[var(--theme-section)] text-[var(--theme-accent)] select-none z-20 pointer-events-none rounded-full border border-black/10 dark:border-white/10 uppercase";
+  // Updated style: use text-[color-mix(in srgb, var(--theme-accent) 50%, transparent)] (50% dimmed accent)
+  const labelStyle = "absolute -top-3 left-6 px-3 py-0.5 text-xs font-bold tracking-wider bg-[var(--theme-section)] text-[color-mix(in_srgb,var(--theme-accent)_50%,transparent)] select-none z-20 pointer-events-none rounded-full border border-black/10 dark:border-white/10 uppercase";
 
-  // Calculate UI font size (4 points smaller than note font size, minimum 10px)
-  const uiFontSize = Math.max(10, fontSize - 4);
+  // Calculate UI font size (4 points smaller than note font size, minimum 14px)
+  const uiFontSize = Math.max(14, fontSize - 4);
 
   const activeNote = getFocusedNote();
   const activeNoteHasContent = activeNote?.content && activeNote.content.trim().length > 0;
+  
+  // Determine if linking tools should be active
+  const hasSelection = selectedNoteIds.size > 0;
+  const linkToolActive = hasSelection || (focusedSection !== 'center' && focusedSection !== 'content' && focusedSection !== 'right' && focusedSection !== 'favs');
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground font-sans">
@@ -721,21 +1034,21 @@ function App() {
       {/* --- Main Content --- */}
       <div className="flex-1 flex flex-col h-full min-w-0">
         
-        {/* Top Bar */}
+        {/* Top Bar - Compacted */}
         <div 
             style={{ fontSize: `${uiFontSize}px` }} 
-            className="h-14 flex-shrink-0 flex items-center px-4 gap-4 z-40 shadow-md relative bg-[var(--theme-bars)] text-foreground transition-colors duration-300"
+            className="h-12 flex-shrink-0 flex items-center px-2 gap-1 z-40 shadow-md relative bg-[var(--theme-bars)] text-foreground transition-colors duration-300"
         >
             
             {/* Left Group: Menu, Home, Favorites List */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
                 
                 {/* Main Menu (Hamburger) */}
                 <div className="relative">
                     <button 
                         onClick={() => setShowMainMenu(!showMainMenu)} 
                         title="Main Menu"
-                        className="p-2 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+                        className="p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
                         style={{ color: 'var(--theme-accent)' }}
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
@@ -826,7 +1139,7 @@ function App() {
                 <button 
                     onClick={goHome} 
                     title="Go Home" 
-                    className="p-2 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+                    className="p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
                     style={{ color: 'var(--theme-accent)' }}
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
@@ -837,7 +1150,7 @@ function App() {
                     <button 
                         title="Favorites List"
                         onClick={() => setShowFavDropdown(!showFavDropdown)} 
-                        className="p-2 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+                        className="p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
                         style={{ color: 'var(--theme-accent)' }}
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
@@ -864,14 +1177,14 @@ function App() {
             </div>
 
             {/* Separator 1 */}
-            <div className="h-6 w-px bg-current opacity-20 mx-1"></div>
+            <div className="h-6 w-px bg-current opacity-20 mx-0.5"></div>
 
             {/* Center Group: Note Actions */}
-             <div className="flex items-center gap-2">
+             <div className="flex items-center gap-1">
                 <button 
                     title="Toggle Favorite (Current Note)"
                     onClick={handleFavoriteToggle} 
-                    className={`p-2 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${
+                    className={`p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${
                         activeNote?.isFavorite 
                             ? '' 
                             : 'text-gray-400'
@@ -883,7 +1196,7 @@ function App() {
                 <button 
                     onClick={handleOpenEditor} 
                     title="View Content (Shift+Enter)" 
-                    className={`p-2 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${
+                    className={`p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${
                         activeNoteHasContent 
                             ? '' 
                             : 'text-gray-400'
@@ -895,16 +1208,16 @@ function App() {
                 <button 
                     onClick={handleStartRename} 
                     title="Rename Note (F2)" 
-                    className="p-2 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+                    className="p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
                     style={{ color: 'var(--theme-accent)' }}
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                 </button>
                 <button 
-                    type="button"
+                    type="button" 
                     onClick={handleDeleteFocusedNote} 
                     title="Delete Note (Ctrl+Backspace)" 
-                    className="p-2 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+                    className="p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
                     style={{ color: 'var(--theme-accent)' }}
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
@@ -912,7 +1225,50 @@ function App() {
             </div>
 
             {/* Separator 2 */}
-            <div className="h-6 w-px bg-current opacity-20 mx-1"></div>
+            <div className="h-6 w-px bg-current opacity-20 mx-0.5"></div>
+
+             {/* Linking Tools */}
+             <div className="flex items-center gap-1">
+                <button 
+                    onClick={() => changeRelationship('unlink')}
+                    disabled={!linkToolActive}
+                    title="Unlink Selected/Focused Note (Backspace)" 
+                    className={`p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${!linkToolActive ? 'opacity-30 cursor-not-allowed' : ''}`}
+                    style={{ color: 'var(--theme-accent)' }}
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                </button>
+                <button 
+                    onClick={() => changeRelationship('left')}
+                    disabled={!linkToolActive}
+                    title="Link as Related (Ctrl+Left)" 
+                    className={`p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${!linkToolActive ? 'opacity-30 cursor-not-allowed' : ''}`}
+                    style={{ color: 'var(--theme-accent)' }}
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                </button>
+                <button 
+                    onClick={() => changeRelationship('up')}
+                    disabled={!linkToolActive}
+                    title="Link as Parent (Ctrl+Up)" 
+                    className={`p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${!linkToolActive ? 'opacity-30 cursor-not-allowed' : ''}`}
+                    style={{ color: 'var(--theme-accent)' }}
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
+                </button>
+                <button 
+                    onClick={() => changeRelationship('down')}
+                    disabled={!linkToolActive}
+                    title="Link as Child (Ctrl+Down)" 
+                    className={`p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${!linkToolActive ? 'opacity-30 cursor-not-allowed' : ''}`}
+                    style={{ color: 'var(--theme-accent)' }}
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>
+                </button>
+             </div>
+
+             {/* Separator 3 */}
+             <div className="h-6 w-px bg-current opacity-20 mx-0.5"></div>
 
             {/* Right: Search (Fill) */}
             <div className="relative flex-1">
@@ -938,8 +1294,11 @@ function App() {
                             setActiveSearchIndex(prev => (prev - 1 + searchResults.length) % searchResults.length);
                         } else if (e.key === 'Enter') {
                             e.preventDefault();
-                            if (searchResults.length > 0 && searchResults[activeSearchIndex]) {
-                                handleSearchSelect(searchResults[activeSearchIndex].id);
+                            e.stopPropagation(); // Stop global handlers
+                            // Fix: Directly use index instead of complex logic
+                            const selected = searchResults[activeSearchIndex];
+                            if (selected) {
+                                handleSearchSelect(selected.id);
                                 searchInputRef.current?.blur();
                             }
                         }
@@ -954,6 +1313,7 @@ function App() {
                                     idx === activeSearchIndex ? 'bg-primary text-primary-foreground' : 'hover:bg-primary/10'
                                 }`}
                                 onClick={() => handleSearchSelect(res.id)}
+                                onMouseEnter={() => setActiveSearchIndex(idx)}
                             >
                                 {res.title}
                             </div>
@@ -964,76 +1324,129 @@ function App() {
 
         </div>
 
-        {/* Canvas Area - GUTTERED GRID */}
+        {/* Canvas Area - 3-COLUMN FLEX LAYOUT */}
         <div 
             ref={mainContainerRef}
-            className="flex-1 bg-[var(--theme-bg)] p-6 overflow-hidden outline-none relative transition-colors duration-300" 
+            className="flex-1 bg-[var(--theme-bg)] p-3 overflow-hidden outline-none relative transition-colors duration-300" 
             tabIndex={0}
         >
-            {/* Changed from percentages to fractions to handle gap without overflow */}
-            <div className="grid grid-cols-[1fr_2fr_1fr] grid-rows-[1fr_minmax(150px,auto)_1fr] gap-4 h-full w-full">
+            <div className="flex h-full w-full gap-3">
                 
-                {/* 1. Uppers (Top Row, Spanning) */}
-                <div className="col-start-1 col-end-3 row-start-1 min-h-0 min-w-0 bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 relative">
-                    <div className={labelStyle}>Parents</div>
-                    <div className="absolute inset-0 overflow-x-auto overflow-y-hidden custom-scrollbar">
+                {/* --- Left Column (25%) --- */}
+                <div className="flex flex-col gap-3 w-1/4">
+                    
+                    {/* Related (Top Left) */}
+                    <div className="flex-1 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
+                        <div className={labelStyle}>Related</div>
                         {renderSection(
-                            topology.uppers, 
-                            'up', 
-                            'h-full w-fit flex flex-col flex-wrap content-start gap-0 p-3 mx-auto', 
-                            'w-[300px] flex-shrink-0',
-                            'container-up'
+                            topology.lefters, 
+                            'left', 
+                            'absolute inset-0 flex flex-col gap-0 overflow-y-auto p-3 custom-scrollbar rounded-3xl pt-6',
+                            'w-full',
+                            'container-left'
+                        )}
+                    </div>
+
+                    {/* Favorites (Bottom Left) */}
+                    <div className="flex-1 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
+                        <div className={labelStyle}>Favorites</div>
+                        {renderSection(
+                            favorites, 
+                            'favs', 
+                            'absolute inset-0 flex flex-col gap-0 overflow-y-auto p-3 custom-scrollbar rounded-3xl pt-6',
+                            'w-full',
+                            'container-favs'
                         )}
                     </div>
                 </div>
 
-                {/* 2. Lefters (Left Col, Mid Row) */}
-                <div className="col-start-1 row-start-2 min-h-0 min-w-0 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5">
-                    <div className={labelStyle}>Related</div>
-                    {renderSection(
-                        topology.lefters, 
-                        'left', 
-                        'absolute inset-0 flex flex-col gap-0 overflow-y-auto p-3 custom-scrollbar',
-                        'w-full'
-                    )}
+                {/* --- Center Column (50%) --- */}
+                <div className="flex flex-col gap-3 w-1/2">
+                    
+                    {/* Top Wrapper (Parents + Active) - flex-1 matches side columns' top section */}
+                    <div className="flex-1 flex flex-col gap-3 min-h-0">
+                        
+                        {/* Parents (35% of column ~ 70% of wrapper) */}
+                        <div className="flex-[7] relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
+                             <div className={labelStyle}>Parents</div>
+                             <div className="absolute inset-0 overflow-x-auto overflow-y-hidden custom-scrollbar rounded-3xl pt-6">
+                                {renderSection(
+                                    topology.uppers, 
+                                    'up', 
+                                    'h-full w-fit flex flex-col flex-wrap content-start gap-0 p-3 mx-auto', 
+                                    'w-[300px] flex-shrink-0',
+                                    'container-up'
+                                )}
+                             </div>
+                        </div>
+
+                        {/* Active Note (15% of column ~ 30% of wrapper) */}
+                        <div className="flex-[3] relative flex items-center justify-center p-4 z-10 bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
+                            <div className={labelStyle}>Active Note</div>
+                            {topology.center && (
+                                <>
+                                    <NoteCard
+                                        note={topology.center}
+                                        fontSize={fontSize}
+                                        isFocused={focusedSection === 'center'}
+                                        isCenter={true}
+                                        onClick={() => {}}
+                                    />
+                                    {/* Status Icons (Moved to Section Container) */}
+                                    <div className="absolute bottom-4 right-4 flex gap-1 pointer-events-none">
+                                        {topology.center.isFavorite && (
+                                            <svg className="text-yellow-600 drop-shadow-sm" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                                        )}
+                                        {topology.center.content && topology.center.content.trim().length > 0 && (
+                                            <svg className="text-yellow-600 drop-shadow-sm" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                                        )}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Children (Bot Center - 50%) */}
+                    <div className="flex-1 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
+                        <div className={labelStyle}>Children</div>
+                        <div className="absolute inset-0 overflow-x-auto overflow-y-hidden custom-scrollbar rounded-3xl pt-6">
+                            {renderSection(
+                                topology.downers, 
+                                'down', 
+                                'h-full w-fit flex flex-col flex-wrap content-start gap-0 p-3 mx-auto', 
+                                'w-[300px] flex-shrink-0',
+                                'container-down'
+                            )}
+                        </div>
+                    </div>
                 </div>
 
-                {/* 3. CENTER STAGE (Center Col, Mid Row) */}
-                <div className="col-start-2 row-start-2 flex items-center justify-center p-4 z-10 relative min-h-0 min-w-0 bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5">
-                     <div className={labelStyle}>Active Note</div>
-                     {topology.center && (
-                        <NoteCard
-                            note={topology.center}
-                            fontSize={fontSize}
-                            isFocused={focusedSection === 'center'}
-                            isCenter={true}
-                            onClick={() => {}}
-                        />
-                     )}
-                </div>
-
-                {/* 4. Righters (Right Col, Full Height) */}
-                <div className="col-start-3 row-start-1 row-span-3 min-h-0 min-w-0 bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 relative">
-                     <div className={labelStyle}>Siblings</div>
-                     {renderSection(
-                        topology.righters, 
-                        'right', 
-                        'flex flex-col gap-0 overflow-y-auto p-3 h-full custom-scrollbar', 
-                        'w-full'
-                    )}
-                </div>
-
-                {/* 5. Downers (Bottom Row, Spanning) */}
-                <div className="col-start-1 col-end-3 row-start-3 min-h-0 min-w-0 bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 relative">
-                    <div className={labelStyle}>Children</div>
-                    <div className="absolute inset-0 overflow-x-auto overflow-y-hidden custom-scrollbar">
-                        {renderSection(
-                            topology.downers, 
-                            'down', 
-                            'h-full w-fit flex flex-col flex-wrap content-start gap-0 p-3 mx-auto', 
-                            'w-[300px] flex-shrink-0',
-                            'container-down'
+                {/* --- Right Column (25%) --- */}
+                <div className="flex flex-col gap-3 w-1/4">
+                    
+                    {/* Siblings (Top Right) */}
+                    <div className="flex-1 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
+                        <div className={labelStyle}>Siblings</div>
+                         {renderSection(
+                            topology.righters, 
+                            'right', 
+                            'flex flex-col gap-0 overflow-y-auto p-3 h-full custom-scrollbar rounded-3xl pt-6', 
+                            'w-full',
+                            'container-right'
                         )}
+                    </div>
+
+                    {/* Content Preview (Bottom Right) */}
+                    <div 
+                        ref={contentPreviewRef}
+                        className={`flex-1 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0 outline-none ${focusedSection === 'content' ? 'ring-2 ring-[var(--theme-accent)]' : ''}`}
+                        tabIndex={-1}
+                    >
+                         <div className={labelStyle}>Content</div>
+                         <div 
+                            className="absolute inset-0 p-6 overflow-auto custom-scrollbar prose dark:prose-invert max-w-none rounded-3xl pt-8"
+                            dangerouslySetInnerHTML={{ __html: previewHtml }}
+                         />
                     </div>
                 </div>
 

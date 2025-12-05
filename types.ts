@@ -9,7 +9,7 @@ export interface Note {
   modifiedAt: number;
 }
 
-export type Section = 'center' | 'up' | 'down' | 'left' | 'right';
+export type Section = 'center' | 'up' | 'down' | 'left' | 'right' | 'favs' | 'content';
 
 export interface Topology {
   center: Note | null;
