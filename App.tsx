@@ -8,6 +8,40 @@ import MarkdownEditor from './components/MarkdownEditor';
 import SettingsModal from './components/SettingsModal';
 import RenameModal from './components/RenameModal';
 
+// --- Markdown Configuration ---
+// Configure marked to open external links in a new tab with icon
+const renderer = new marked.Renderer();
+
+// Robust adapter for different marked versions (args vs object)
+renderer.link = function(hrefOrObj: string | { href: string; title?: string; text: string }, title?: string | null, text?: string) {
+    let href: string = '';
+    let linkTitle: string | null | undefined = title;
+    let linkText: string = text || '';
+
+    if (typeof hrefOrObj === 'object') {
+        href = hrefOrObj.href;
+        linkTitle = hrefOrObj.title;
+        linkText = hrefOrObj.text;
+    } else {
+        href = hrefOrObj;
+    }
+
+    const isExternal = href && (href.startsWith('http') || href.startsWith('//'));
+    const targetAttr = isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
+    const titleAttr = linkTitle ? ` title="${linkTitle}"` : '';
+    
+    let output = `<a href="${href}"${titleAttr}${targetAttr}>${linkText}`;
+    
+    if (isExternal) {
+        output += '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block ml-0.5 opacity-70 mb-0.5 align-baseline"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>';
+    }
+    
+    output += '</a>';
+    return output;
+};
+
+marked.use({ renderer });
+
 function App() {
   // --- State ---
   const [centralNoteId, setCentralNoteId] = useState<string | null>(null);
@@ -86,7 +120,7 @@ function App() {
       }, 100);
 
       // Set Document Title
-      document.title = `NexusNode PKM - ${getCurrentVaultName()}`;
+      document.title = `JaRoet PKM - ${getCurrentVaultName()}`;
     };
     init();
   }, []);
@@ -241,13 +275,7 @@ function App() {
           
           if (target && target.content) {
               try {
-                // Configure renderer to open links in new tab
-                const renderer = new marked.Renderer();
-                renderer.link = (href, title, text) => {
-                    return `<a target="_blank" rel="noopener noreferrer" href="${href}" title="${title || ''}">${text}</a>`;
-                };
-
-                const html = await marked.parse(target.content, { renderer, breaks: true, gfm: true });
+                const html = await marked.parse(target.content, { breaks: true, gfm: true });
                 setPreviewHtml(html);
               } catch {
                 setPreviewHtml('<p class="text-red-500">Error rendering markdown</p>');
@@ -1456,7 +1484,7 @@ function App() {
         {/* --- Footer / Status Bar --- */}
         <div style={{ fontSize: `${uiFontSize}px` }} className="h-8 flex-shrink-0 bg-[var(--theme-bars)] flex items-center justify-between px-4 text-foreground z-50 transition-colors duration-300">
             <div className="flex-shrink-0 opacity-90">
-                Notes: {totalNoteCount} | DB: {getCurrentVaultName()}
+                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} | Version: 0.1.2
             </div>
             <div className="opacity-60 truncate ml-4 text-right">
                 Arrows: Nav | Space: Recenter | Enter: Focus | Shift+Enter: Edit | Ctrl+Arrows: Link | F2: Rename | Bksp: Unlink
