@@ -425,7 +425,7 @@ function App() {
             await updateNote(centerId, { relatedTo: center.relatedTo.filter(id => id !== targetId) });
         }
         if (target.relatedTo.includes(centerId)) {
-            await updateNote(targetId, { relatedTo: target.relatedTo.filter(id => id !== centerId) });
+            await updateNote(targetId, { relatedTo: target.relatedTo.filter(id => id !== targetId) });
         }
       };
 
@@ -496,7 +496,7 @@ function App() {
             await updateNote(centerId, { relatedTo: center.relatedTo.filter(id => id !== targetId) });
         }
         if (target.relatedTo.includes(centerId)) {
-            await updateNote(targetId, { relatedTo: target.relatedTo.filter(id => id !== centerId) });
+            await updateNote(targetId, { relatedTo: target.relatedTo.filter(id => id !== targetId) });
         }
     };
     
@@ -1043,10 +1043,8 @@ function App() {
     );
   };
   
-  // Updated style: use text-[color-mix(in srgb, var(--theme-accent) 50%, transparent)] (50% dimmed accent)
-  // Position change: -top-[5px] to position label higher (5px overlap)
-  // Font Size change: text-[10px] to make labels smaller
-  const labelStyle = "absolute -top-[5px] left-6 px-3 py-0.5 text-[10px] font-bold tracking-wider bg-[var(--theme-section)] text-[color-mix(in_srgb,var(--theme-accent)_50%,transparent)] select-none z-20 pointer-events-none rounded-full border border-black/10 dark:border-white/10 uppercase";
+  // Updated style: Removed fixed text-[10px] and uppercase class to allow dynamic sizing and Title Case
+  const labelStyle = "absolute -top-[5px] left-6 px-3 py-0.5 font-bold tracking-wider bg-[var(--theme-section)] text-[color-mix(in_srgb,var(--theme-accent)_50%,transparent)] select-none z-20 pointer-events-none rounded-full border border-black/10 dark:border-white/10";
 
   // Calculate UI font size (4 points smaller than note font size, minimum 14px)
   const uiFontSize = Math.max(14, fontSize - 4);
@@ -1367,7 +1365,7 @@ function App() {
                     
                     {/* Related (Top Left) */}
                     <div className="flex-1 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
-                        <div className={labelStyle}>Related</div>
+                        <div className={labelStyle} style={{ fontSize: `${Math.max(8, fontSize - 10)}px` }}>Related</div>
                         {renderSection(
                             topology.lefters, 
                             'left', 
@@ -1379,7 +1377,7 @@ function App() {
 
                     {/* Favorites (Bottom Left) */}
                     <div className="flex-1 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
-                        <div className={labelStyle}>Favorites</div>
+                        <div className={labelStyle} style={{ fontSize: `${Math.max(8, fontSize - 10)}px` }}>Favorites</div>
                         {renderSection(
                             favorites, 
                             'favs', 
@@ -1398,7 +1396,7 @@ function App() {
                         
                         {/* Parents (35% of column ~ 70% of wrapper) */}
                         <div className="flex-[7] relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
-                             <div className={labelStyle}>Parents</div>
+                             <div className={labelStyle} style={{ fontSize: `${Math.max(8, fontSize - 10)}px` }}>Parents</div>
                              <div className="absolute inset-0 overflow-x-auto overflow-y-hidden custom-scrollbar rounded-3xl pt-6">
                                 {renderSection(
                                     topology.uppers, 
@@ -1412,7 +1410,7 @@ function App() {
 
                         {/* Active Note (15% of column ~ 30% of wrapper) */}
                         <div className="flex-[3] relative flex items-center justify-center p-4 z-10 bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
-                            <div className={labelStyle}>Active Note</div>
+                            <div className={labelStyle} style={{ fontSize: `${Math.max(8, fontSize - 10)}px` }}>Active Note</div>
                             {topology.center && (
                                 <>
                                     <NoteCard
@@ -1438,7 +1436,7 @@ function App() {
 
                     {/* Children (Bot Center - 50%) */}
                     <div className="flex-1 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
-                        <div className={labelStyle}>Children</div>
+                        <div className={labelStyle} style={{ fontSize: `${Math.max(8, fontSize - 10)}px` }}>Children</div>
                         <div className="absolute inset-0 overflow-x-auto overflow-y-hidden custom-scrollbar rounded-3xl pt-6">
                             {renderSection(
                                 topology.downers, 
@@ -1456,7 +1454,7 @@ function App() {
                     
                     {/* Siblings (Top Right) */}
                     <div className="flex-1 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
-                        <div className={labelStyle}>Siblings</div>
+                        <div className={labelStyle} style={{ fontSize: `${Math.max(8, fontSize - 10)}px` }}>Siblings</div>
                          {renderSection(
                             topology.righters, 
                             'right', 
@@ -1472,7 +1470,7 @@ function App() {
                         className={`flex-1 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0 outline-none ${focusedSection === 'content' ? 'ring-2 ring-[var(--theme-accent)]' : ''}`}
                         tabIndex={-1}
                     >
-                         <div className={labelStyle}>Content</div>
+                         <div className={labelStyle} style={{ fontSize: `${Math.max(8, fontSize - 10)}px` }}>Content</div>
                          <div 
                             className="absolute inset-0 p-6 overflow-auto custom-scrollbar prose dark:prose-invert max-w-none rounded-3xl pt-8"
                             dangerouslySetInnerHTML={{ __html: previewHtml }}
@@ -1486,7 +1484,7 @@ function App() {
         {/* --- Footer / Status Bar --- */}
         <div style={{ fontSize: `${uiFontSize}px` }} className="h-8 flex-shrink-0 bg-[var(--theme-bars)] flex items-center justify-between px-4 text-foreground z-50 transition-colors duration-300">
             <div className="flex-shrink-0 opacity-90">
-                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} | Version: 0.1.6
+                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.1.9
             </div>
             <div className="opacity-60 truncate ml-4 text-right">
                 Arrows: Nav | Space: Recenter | Enter: Focus | Shift+Enter: Edit | Ctrl+Arrows: Link | F2: Rename | Bksp: Unlink

@@ -2,6 +2,26 @@
 
 All notable changes to the JaRoet PKM project will be documented in this file.
 
+## [0.1.9] - 2024-05-23
+
+### Changed
+- **UI Adjustment:** Reduced section label font size further to `fontSize - 10` (minimum 8px) for an even subtler appearance.
+- **UI Adjustment:** Simplified status bar format to show version number directly after DB name without "Version:" prefix or extra separators.
+- **Version:** Bumped version number to 0.1.9.
+
+## [0.1.8] - 2024-05-23
+
+### Changed
+- **UI Adjustment:** Drastically reduced section label font size (`fontSize - 6`) to minimize visual dominance, as per user feedback.
+- **Version:** Bumped version number to 0.1.8.
+
+## [0.1.7] - 2024-05-23
+
+### Changed
+- **UI Adjustment:** Section labels now use Title Case instead of Uppercase.
+- **UI Adjustment:** Section label font size is now dynamic (set to 2px smaller than the base note font size) rather than fixed.
+- **Version:** Bumped version number to 0.1.7.
+
 ## [0.1.6] - 2024-05-23
 
 ### Changed

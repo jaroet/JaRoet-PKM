@@ -2090,8 +2090,8 @@
             );
           };
           
-          // Updated font size to 10px
-          const labelStyle = "absolute -top-[5px] left-6 px-3 py-0.5 text-[10px] font-bold tracking-wider bg-[var(--theme-section)] text-[color-mix(in_srgb,var(--theme-accent)_50%,transparent)] select-none z-20 pointer-events-none rounded-full border border-black/10 dark:border-white/10 uppercase";
+          // Updated: Dynamic font size and removed uppercase
+          const labelStyle = "absolute -top-[5px] left-6 px-3 py-0.5 font-bold tracking-wider bg-[var(--theme-section)] text-[color-mix(in_srgb,var(--theme-accent)_50%,transparent)] select-none z-20 pointer-events-none rounded-full border border-black/10 dark:border-white/10";
           const uiFontSize = Math.max(14, fontSize - 4);
           const activeNote = getFocusedNote();
           const activeNoteHasContent = activeNote?.content && activeNote.content.trim().length > 0;
@@ -2383,7 +2383,7 @@
                         <div className="flex flex-col gap-3 w-1/4">
                             
                             <div className="flex-1 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
-                                <div className={labelStyle}>Related</div>
+                                <div className={labelStyle} style={{ fontSize: `${Math.max(8, fontSize - 10)}px` }}>Related</div>
                                 {renderSection(
                                     topology.lefters, 
                                     'left', 
@@ -2394,7 +2394,7 @@
                             </div>
 
                             <div className="flex-1 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
-                                <div className={labelStyle}>Favorites</div>
+                                <div className={labelStyle} style={{ fontSize: `${Math.max(8, fontSize - 10)}px` }}>Favorites</div>
                                 {renderSection(
                                     favorites, 
                                     'favs', 
@@ -2410,7 +2410,7 @@
                             <div className="flex-1 flex flex-col gap-3 min-h-0">
                                 
                                 <div className="flex-[7] relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
-                                     <div className={labelStyle}>Parents</div>
+                                     <div className={labelStyle} style={{ fontSize: `${Math.max(8, fontSize - 10)}px` }}>Parents</div>
                                      <div className="absolute inset-0 overflow-x-auto overflow-y-hidden custom-scrollbar rounded-3xl pt-6">
                                         {renderSection(
                                             topology.uppers, 
@@ -2423,7 +2423,7 @@
                                 </div>
 
                                 <div className="flex-[3] relative flex items-center justify-center p-4 z-10 bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
-                                    <div className={labelStyle}>Active Note</div>
+                                    <div className={labelStyle} style={{ fontSize: `${Math.max(8, fontSize - 10)}px` }}>Active Note</div>
                                     {topology.center && (
                                         <>
                                             <NoteCard
@@ -2448,7 +2448,7 @@
                             </div>
 
                             <div className="flex-1 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
-                                <div className={labelStyle}>Children</div>
+                                <div className={labelStyle} style={{ fontSize: `${Math.max(8, fontSize - 10)}px` }}>Children</div>
                                 <div className="absolute inset-0 overflow-x-auto overflow-y-hidden custom-scrollbar rounded-3xl pt-6">
                                     {renderSection(
                                         topology.downers, 
@@ -2464,7 +2464,7 @@
                         <div className="flex flex-col gap-3 w-1/4">
                             
                             <div className="flex-1 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
-                                <div className={labelStyle}>Siblings</div>
+                                <div className={labelStyle} style={{ fontSize: `${Math.max(8, fontSize - 10)}px` }}>Siblings</div>
                                  {renderSection(
                                     topology.righters, 
                                     'right', 
@@ -2479,7 +2479,7 @@
                                 className={`flex-1 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0 outline-none ${focusedSection === 'content' ? 'ring-2 ring-[var(--theme-accent)]' : ''}`}
                                 tabIndex={-1}
                             >
-                                 <div className={labelStyle}>Content</div>
+                                 <div className={labelStyle} style={{ fontSize: `${Math.max(8, fontSize - 10)}px` }}>Content</div>
                                  <div 
                                     className="absolute inset-0 p-6 overflow-auto custom-scrollbar prose dark:prose-invert max-w-none rounded-3xl pt-8"
                                     dangerouslySetInnerHTML={{ __html: previewHtml }}
@@ -2492,7 +2492,7 @@
                 
                 <div style={{ fontSize: `${uiFontSize}px` }} className="h-8 flex-shrink-0 bg-[var(--theme-bars)] flex items-center justify-between px-4 text-foreground z-50 transition-colors duration-300">
                     <div className="flex-shrink-0 opacity-90">
-                        Notes: {totalNoteCount} | DB: {getCurrentVaultName()} | Version: 0.1.6
+                        Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.1.9
                     </div>
                     <div className="opacity-60 truncate ml-4 text-right">
                         Arrows: Nav | Space: Recenter | Enter: Focus | Shift+Enter: Edit | Ctrl+Arrows: Link | F2: Rename | Bksp: Unlink
