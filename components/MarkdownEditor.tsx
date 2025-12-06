@@ -106,15 +106,15 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, onClose, 
       return;
     }
     
-    // Ctrl+E / Cmd+E - Toggle Mode
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'e') {
+    // Ctrl+Enter / Cmd+Enter - Toggle Mode
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'Enter') {
         e.preventDefault();
         handleToggleMode();
         return;
     }
 
-    // Ctrl+Enter - Save and Close
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    // Ctrl+Shift+Enter - Save and Close
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'Enter') {
         e.preventDefault();
         if (note) onSave(note.id, content);
         onClose();
@@ -137,7 +137,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, onClose, 
           <div className="flex gap-2 flex-shrink-0">
             <button
               onClick={handleToggleMode}
-              title="Ctrl+E"
+              title="Ctrl+Enter"
               className="px-3 py-1 rounded bg-gray-200 dark:bg-gray-700 hover:opacity-80 text-sm min-w-[80px]"
             >
               {isPreview ? 'Edit' : 'Preview'}
@@ -147,7 +147,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, onClose, 
                 onSave(note.id, content);
                 onClose();
               }}
-              title="Ctrl+Enter"
+              title="Ctrl+Shift+Enter"
               className="px-3 py-1 rounded bg-primary text-white hover:opacity-80 text-sm"
             >
               Save & Close
@@ -182,8 +182,8 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, onClose, 
         </div>
         <div className="p-2 text-xs text-gray-500 border-t dark:border-gray-700 text-center bg-background/50 rounded-b-lg">
             {isPreview 
-                ? 'View Mode • Ctrl+E to Edit • Esc to Close' 
-                : 'Edit Mode • Ctrl+E to Save & Preview • Ctrl+Enter to Save & Close • Esc to Cancel'
+                ? 'View Mode • Ctrl+Enter to Edit • Esc to Close' 
+                : 'Edit Mode • Ctrl+Enter to Save & Preview • Ctrl+Shift+Enter to Save & Close • Esc to Cancel'
             }
         </div>
       </div>

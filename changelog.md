@@ -2,6 +2,19 @@
 
 All notable changes to the JaRoet PKM project will be documented in this file.
 
+## [0.2.8] - 2024-05-23
+
+### Changed
+- **Markdown Editor Hotkeys:** 
+    - Changed "Toggle Edit/Preview" from `Ctrl+E` to `Ctrl+Enter`.
+    - Changed "Save & Close" from `Ctrl+Enter` to `Ctrl+Shift+Enter`.
+- **Version:** Bumped version number to 0.2.8.
+
+## [0.2.7] - 2024-05-23
+
+### Changed
+- **Bundling:** Re-generated standalone build with full functionality.
+
 ## [0.2.6] - 2024-05-23
 
 ### Changed
