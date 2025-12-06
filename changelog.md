@@ -2,6 +2,22 @@
 
 All notable changes to the JaRoet PKM project will be documented in this file.
 
+## [0.2.10] - 2024-05-23
+
+### Added
+- **README:** Added `README.md` for project overview and quick start guide.
+
+### Changed
+- **Version:** Bumped version number to 0.2.10.
+
+## [0.2.9] - 2024-05-23
+
+### Added
+- **Documentation:** Added a comprehensive `documentation.md` file detailing app context, interface layout, icons, hotkeys, and features.
+
+### Changed
+- **Version:** Bumped version number to 0.2.9.
+
 ## [0.2.8] - 2024-05-23
 
 ### Changed

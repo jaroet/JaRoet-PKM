@@ -1,20 +1,26 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# JaRoet PKM
 
-# Run and deploy your AI Studio app
+**JaRoet PKM** is a fast, local-first Personal Knowledge Management tool designed for keyboard power users. It moves away from traditional folder structures, organizing your notes based on their relationships (Parents, Children, Siblings, and Related items). This creates a natural "topology" of thought that you can navigate fluidly.
 
-This contains everything you need to run your app locally.
+## Key Features
 
-View your app in AI Studio: https://ai.studio/apps/drive/1i_V_aQwKPbnUDmvMxfGR0xQAqUdmM7L2
+*   **Topological Navigation:** Browse notes based on context—what links to it, what it links to, and what is related.
+*   **Keyboard-Centric:** Navigate, link, unlink, edit, and reorganize your graph without touching the mouse.
+*   **Local & Private:** All data is stored locally in your browser (IndexedDB). Nothing is sent to the cloud.
+*   **Markdown Support:** Full editor with preview support.
+*   **Journaling Engine:** Automated daily note creation with historical linking ("On This Day") and sequential navigation.
+*   **Single File App:** The entire application runs from a single HTML file.
 
-## Run Locally
+## Documentation
 
-**Prerequisites:**  Node.js
+For a detailed guide on how to use the interface, shortcuts, and features, please read the [Full Documentation](documentation.md).
 
+## Getting Started
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+1.  Download the `index.html` file (or the `dist/index.html` from the repository).
+2.  Open it in any modern web browser.
+3.  Start typing!
+
+## License
+
+MIT
