@@ -2,6 +2,12 @@
 
 All notable changes to the JaRoet PKM project will be documented in this file.
 
+## [0.2.6] - 2024-05-23
+
+### Changed
+- **Journal Note Creation:** Creating a new journal day note (e.g. via Ctrl+J) now creates it as an empty note instead of pre-filling it with the "Morning Manifest/Log/Reflection" template.
+- **Version:** Bumped version number to 0.2.6.
+
 ## [0.2.5] - 2024-05-23
 
 ### Changed

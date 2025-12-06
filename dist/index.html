@@ -541,8 +541,7 @@
             let dayNote = await findNoteByExactTitle(dateInfo.full);
             if (!dayNote) {
                 dayNote = await createNote(dateInfo.full);
-                const template = `# ${dateInfo.full}\n\n## 🌞 Morning Manifest\n- [ ] Focus: \n- [ ] Mood: \n\n## 🧠 Log\n\n\n## 🌜 Evening Reflection\n- Win of the day: \n`;
-                await updateNote(dayNote.id, { content: template });
+                // Template Removed per request 0.2.6
 
                 const freshMonth = await getNote(monthNote.id);
                 if (freshMonth && !freshMonth.linksTo.includes(dayNote.id)) {
@@ -1648,8 +1647,7 @@
 
 
           useEffect(() => {
-            if (focusedSection === 'center' || focusedSection === 'content') return;
-            
+            // Safety check if hidden sections are focused
             if (focusedSection === 'favs' && !showFavorites) {
                 setFocusedSection('left');
                 setFocusedIndex(0);
@@ -1660,6 +1658,8 @@
                 setFocusedIndex(0);
                 return;
             }
+
+            if (focusedSection === 'center' || focusedSection === 'content') return;
 
             const notes = getSortedNotes(focusedSection);
             if (notes.length === 0) {
@@ -2774,7 +2774,7 @@
                 
                 <div style={{ fontSize: `${uiFontSize}px` }} className="h-8 flex-shrink-0 bg-[var(--theme-bars)] flex items-center justify-between px-4 text-foreground z-50 transition-colors duration-300">
                     <div className="flex-shrink-0 opacity-90">
-                        Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.2.5
+                        Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.2.6
                     </div>
                     <div className="opacity-60 truncate ml-4 text-right">
                         Arrows: Nav | Space: Recenter | Enter: Focus | Shift+Enter: Edit | Ctrl+Arrows: Link | F2: Rename | Bksp: Unlink
