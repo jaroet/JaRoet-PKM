@@ -321,6 +321,7 @@ function App() {
         setFocusedIndex(0);
         return;
     }
+    // FIX: Moved this check before the early return to ensure we can switch focus away from content if it gets hidden
     if (focusedSection === 'content' && !showContent) {
         setFocusedSection('right');
         setFocusedIndex(0);
@@ -328,7 +329,7 @@ function App() {
     }
     
     if (focusedSection === 'center' || focusedSection === 'content') return;
-    
+
     const notes = getSortedNotes(focusedSection);
     // If section is empty but we are focused on it, move to center
     if (notes.length === 0) {
@@ -516,15 +517,11 @@ function App() {
           } else if (type === 'left') {
             // Bi-directional Related
             const center = await getNote(centralNoteId);
-            if (center) {
-                await updateNote(centralNoteId, { relatedTo: [...center.relatedTo, id] });
-            }
-    
+            if (center) await updateNote(centralNoteId, { relatedTo: [...center.relatedTo, id] });
+            
             const target = await getNote(id);
-            if (target) {
-                await updateNote(id, { relatedTo: [...target.relatedTo, centralNoteId] });
-            }
-        }
+            if (target) await updateNote(id, { relatedTo: [...target.relatedTo, centralNoteId] });
+          }
       }
 
       loadTopology(centralNoteId);
@@ -636,7 +633,12 @@ function App() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `nexusnode_backup_${getCurrentVaultName()}_${Date.now()}.json`;
+    
+    const now = new Date();
+    // Format: YYYY-MM-DD_HH-mm
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
+    
+    a.download = `JaRoetPKM_${getCurrentVaultName()}_${dateStr}.json`;
     a.click();
     URL.revokeObjectURL(url);
     setShowMainMenu(false);

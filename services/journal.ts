@@ -73,6 +73,10 @@ export const goToToday = async (): Promise<string> => {
     if (!dayNote) {
         dayNote = await createNote(dateInfo.full);
         
+        // Template
+        const template = `# ${dateInfo.full}\n\n## 🌞 Morning Manifest\n- [ ] Focus: \n- [ ] Mood: \n\n## 🧠 Log\n\n\n## 🌜 Evening Reflection\n- Win of the day: \n`;
+        await updateNote(dayNote.id, { content: template });
+
         // Link Day to Month (Month is Parent)
         const freshMonth = await getNote(monthNote.id);
         if (freshMonth && !freshMonth.linksTo.includes(dayNote.id)) {

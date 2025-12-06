@@ -5,7 +5,7 @@ All notable changes to the JaRoet PKM project will be documented in this file.
 ## [0.2.5] - 2024-05-23
 
 ### Changed
-- **Journal:** New daily notes now start empty instead of having a pre-filled template.
+- **Export Data:** The exported JSON file now includes the vault name and a readable date/time (YYYY-MM-DD_HH-mm) in the filename for better organization.
 - **Version:** Bumped version number to 0.2.5.
 
 ## [0.2.4] - 2024-05-23
