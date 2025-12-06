@@ -315,8 +315,6 @@ function App() {
 
   // --- Focus Integrity (Clamping) ---
   useEffect(() => {
-    if (focusedSection === 'center' || focusedSection === 'content') return;
-    
     // Safety check if hidden sections are focused (though keyboard logic prevents this, mouse or weird state might cause it)
     if (focusedSection === 'favs' && !showFavorites) {
         setFocusedSection('left');
@@ -328,7 +326,9 @@ function App() {
         setFocusedIndex(0);
         return;
     }
-
+    
+    if (focusedSection === 'center' || focusedSection === 'content') return;
+    
     const notes = getSortedNotes(focusedSection);
     // If section is empty but we are focused on it, move to center
     if (notes.length === 0) {
@@ -516,11 +516,15 @@ function App() {
           } else if (type === 'left') {
             // Bi-directional Related
             const center = await getNote(centralNoteId);
-            if (center) await updateNote(centralNoteId, { relatedTo: [...center.relatedTo, id] });
-            
+            if (center) {
+                await updateNote(centralNoteId, { relatedTo: [...center.relatedTo, id] });
+            }
+    
             const target = await getNote(id);
-            if (target) await updateNote(id, { relatedTo: [...target.relatedTo, centralNoteId] });
-          }
+            if (target) {
+                await updateNote(id, { relatedTo: [...target.relatedTo, centralNoteId] });
+            }
+        }
       }
 
       loadTopology(centralNoteId);
@@ -1593,7 +1597,7 @@ function App() {
         {/* --- Footer / Status Bar --- */}
         <div style={{ fontSize: `${uiFontSize}px` }} className="h-8 flex-shrink-0 bg-[var(--theme-bars)] flex items-center justify-between px-4 text-foreground z-50 transition-colors duration-300">
             <div className="flex-shrink-0 opacity-90">
-                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.2.4
+                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.2.5
             </div>
             <div className="opacity-60 truncate ml-4 text-right">
                 Arrows: Nav | Space: Recenter | Enter: Focus | Shift+Enter: Edit | Ctrl+Arrows: Link | F2: Rename | Bksp: Unlink

@@ -2,6 +2,12 @@
 
 All notable changes to the JaRoet PKM project will be documented in this file.
 
+## [0.2.5] - 2024-05-23
+
+### Changed
+- **Journal:** New daily notes now start empty instead of having a pre-filled template.
+- **Version:** Bumped version number to 0.2.5.
+
 ## [0.2.4] - 2024-05-23
 
 ### Changed
