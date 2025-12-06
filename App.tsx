@@ -404,64 +404,54 @@ function App() {
     }
   }, []);
 
-  // --- Deletion Logic ---
+  const performDelete = useCallback(async (note: Note) => {
+        await deleteNote(note.id);
+        
+        // If we deleted the central note, we must navigate away
+        if (note.id === centralNoteId) {
+            goHome(); // This will fallback to first available if home is gone
+        } else {
+            // We deleted a peripheral note, just refresh topology
+            if (centralNoteId) loadTopology(centralNoteId);
+        }
+        refreshFavorites(); // In case we deleted a favorite
+        updateTotalCount();
+  }, [centralNoteId, goHome]);
 
-  // Helper: Actual deletion logic
-  const performDeleteOp = useCallback(async (id: string) => {
-      await deleteNote(id);
-      if (id === centralNoteId) return true; // Signal that central note was deleted
-      return false;
-  }, [centralNoteId]);
+  const performBulkDelete = useCallback(async (ids: string[]) => {
+      let centerDeleted = false;
+      for (const id of ids) {
+          await deleteNote(id);
+          if (id === centralNoteId) centerDeleted = true;
+      }
+
+      if (centerDeleted) {
+          await goHome();
+      } else {
+          if (centralNoteId) await loadTopology(centralNoteId);
+      }
+      refreshFavorites();
+      updateTotalCount();
+      setSelectedNoteIds(new Set()); // Clear selection
+  }, [centralNoteId, goHome]);
 
   const handleDeleteAction = useCallback(async (e?: React.MouseEvent | React.KeyboardEvent) => {
-    if (e) {
-        e.preventDefault();
-        e.stopPropagation();
-    }
-
-    // PATH 1: Bulk Delete (if selection exists)
+    if (e) e.preventDefault();
+    
+    // Access selection via ref to ensure freshness
     const selectedIds = Array.from(selectedNoteIdsRef.current) as string[];
     
     if (selectedIds.length > 0) {
-        if(confirm(`Confirm deletion of ${selectedIds.length} selected notes?`)) {
-            let centerDeleted = false;
-            
-            // Execute deletes
-            for (const id of selectedIds) {
-                const wasCenter = await performDeleteOp(id);
-                if (wasCenter) centerDeleted = true;
-            }
-
-            // Cleanup
-            setSelectedNoteIds(new Set()); // Clear selection immediately
-            
-            if (centerDeleted) {
-                await goHome();
-            } else {
-                if (centralNoteId) await loadTopology(centralNoteId);
-            }
-            refreshFavorites();
-            updateTotalCount();
+        if(confirm(`Are you sure you want to delete ${selectedIds.length} selected notes?`)) {
+            await performBulkDelete(selectedIds);
         }
-        return; // EXIT - Do not fall through to single delete
-    }
-
-    // PATH 2: Single Delete (Focused Note)
-    const note = getFocusedNote();
-    if (note) {
-        if (confirm(`Delete note "${note.title}"?`)) {
-            const wasCenter = await performDeleteOp(note.id);
-            
-            if (wasCenter) {
-                await goHome();
-            } else {
-                if (centralNoteId) await loadTopology(centralNoteId);
-            }
-            refreshFavorites();
-            updateTotalCount();
+    } else {
+        const note = getFocusedNote();
+        if (note) {
+            await performDelete(note);
         }
     }
-  }, [centralNoteId, getFocusedNote, performDeleteOp, goHome]);
+  }, [getFocusedNote, performBulkDelete, performDelete]);
 
 
   // --- Relationship Management Logic ---
@@ -1603,7 +1593,7 @@ function App() {
         {/* --- Footer / Status Bar --- */}
         <div style={{ fontSize: `${uiFontSize}px` }} className="h-8 flex-shrink-0 bg-[var(--theme-bars)] flex items-center justify-between px-4 text-foreground z-50 transition-colors duration-300">
             <div className="flex-shrink-0 opacity-90">
-                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.2.5
+                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.2.4
             </div>
             <div className="opacity-60 truncate ml-4 text-right">
                 Arrows: Nav | Space: Recenter | Enter: Focus | Shift+Enter: Edit | Ctrl+Arrows: Link | F2: Rename | Bksp: Unlink

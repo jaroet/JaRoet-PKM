@@ -1729,55 +1729,49 @@
             }
           }, []);
 
-          const performDeleteOp = useCallback(async (id) => {
-              await deleteNote(id);
-              if (id === centralNoteId) return true; 
-              return false;
-          }, [centralNoteId]);
+          const performDelete = useCallback(async (note) => {
+                await deleteNote(note.id);
+                if (note.id === centralNoteId) {
+                    goHome(); 
+                } else {
+                    if (centralNoteId) loadTopology(centralNoteId);
+                }
+                refreshFavorites();
+                updateTotalCount();
+          }, [centralNoteId, goHome]);
+
+          const performBulkDelete = useCallback(async (ids) => {
+              let centerDeleted = false;
+              for (const id of ids) {
+                  await deleteNote(id);
+                  if (id === centralNoteId) centerDeleted = true;
+              }
+
+              if (centerDeleted) {
+                  await goHome();
+              } else {
+                  if (centralNoteId) await loadTopology(centralNoteId);
+              }
+              refreshFavorites();
+              updateTotalCount();
+              setSelectedNoteIds(new Set()); 
+          }, [centralNoteId, goHome]);
 
           const handleDeleteAction = useCallback(async (e) => {
-            if (e) {
-                e.preventDefault();
-                e.stopPropagation();
-            }
-
-            const selectedIds = Array.from(selectedNoteIdsRef.current);
+            if (e) e.preventDefault();
             
+            const selectedIds = Array.from(selectedNoteIdsRef.current);
             if (selectedIds.length > 0) {
-                if(confirm(`Confirm deletion of ${selectedIds.length} selected notes?`)) {
-                    let centerDeleted = false;
-                    for (const id of selectedIds) {
-                        const wasCenter = await performDeleteOp(id);
-                        if (wasCenter) centerDeleted = true;
-                    }
-                    setSelectedNoteIds(new Set()); 
-                    
-                    if (centerDeleted) {
-                        await goHome();
-                    } else {
-                        if (centralNoteId) await loadTopology(centralNoteId);
-                    }
-                    refreshFavorites();
-                    updateTotalCount();
+                if(confirm(`Are you sure you want to delete ${selectedIds.length} selected notes?`)) {
+                    await performBulkDelete(selectedIds);
                 }
-                return; 
-            }
-
-            const note = getFocusedNote();
-            if (note) {
-                if (confirm(`Delete note "${note.title}"?`)) {
-                    const wasCenter = await performDeleteOp(note.id);
-                    
-                    if (wasCenter) {
-                        await goHome();
-                    } else {
-                        if (centralNoteId) await loadTopology(centralNoteId);
-                    }
-                    refreshFavorites();
-                    updateTotalCount();
+            } else {
+                const note = getFocusedNote();
+                if (note) {
+                    await performDelete(note);
                 }
             }
-          }, [centralNoteId, getFocusedNote, performDeleteOp, goHome]);
+          }, [selectedNoteIds, getFocusedNote, performBulkDelete, performDelete]);
 
           const getSelectedOrFocusedNotes = () => {
               if (selectedNoteIdsRef.current.size > 0) {
@@ -1831,6 +1825,7 @@
                   } else if (type === 'left') {
                     const center = await getNote(centralNoteId);
                     if (center) await updateNote(centralNoteId, { relatedTo: [...center.relatedTo, id] });
+                    
                     const target = await getNote(id);
                     if (target) await updateNote(id, { relatedTo: [...target.relatedTo, centralNoteId] });
                   }
@@ -1870,7 +1865,7 @@
                     await updateNote(centerId, { relatedTo: center.relatedTo.filter(id => id !== targetId) });
                 }
                 if (target.relatedTo.includes(centerId)) {
-                    await updateNote(targetId, { relatedTo: target.relatedTo.filter(id => id !== targetId) });
+                    await updateNote(targetId, { relatedTo: target.relatedTo.filter(id => id !== centerId) });
                 }
             };
             
@@ -2777,7 +2772,7 @@
                 
                 <div style={{ fontSize: `${uiFontSize}px` }} className="h-8 flex-shrink-0 bg-[var(--theme-bars)] flex items-center justify-between px-4 text-foreground z-50 transition-colors duration-300">
                     <div className="flex-shrink-0 opacity-90">
-                        Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.2.5
+                        Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.2.4
                     </div>
                     <div className="opacity-60 truncate ml-4 text-right">
                         Arrows: Nav | Space: Recenter | Enter: Focus | Shift+Enter: Edit | Ctrl+Arrows: Link | F2: Rename | Bksp: Unlink
