@@ -17,7 +17,7 @@ For a detailed guide on how to use the interface, shortcuts, and features, pleas
 
 ## Getting Started
 
-1.  Download the `index.html` file (or the `dist/index.html` from the repository).
+1.  Download the `index.html` file from the [latest release](https://github.com/jaroet/JaRoet-PKM/releases).
 2.  Open it in any modern web browser.
 3.  Start typing!
 
