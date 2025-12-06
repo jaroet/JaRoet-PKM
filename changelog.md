@@ -2,6 +2,16 @@
 
 All notable changes to the JaRoet PKM project will be documented in this file.
 
+## [0.2.11] - 2024-05-23
+
+### Changed
+- **Hotkeys Swapped:**
+    - **Space Bar:** Now navigates into the focused note (makes it the Active Center Note). Previously this was `Enter`.
+    - **Enter:** Now refocuses the cursor onto the Active Center Note. Previously this was `Space`.
+- **UI Update:** Status bar hints updated to reflect new key bindings.
+- **Documentation:** Updated `documentation.md` with new keyboard shortcuts.
+- **Version:** Bumped version number to 0.2.11.
+
 ## [0.2.10] - 2024-05-23
 
 ### Added
@@ -65,7 +75,7 @@ All notable changes to the JaRoet PKM project will be documented in this file.
 ## [0.2.1] - 2024-05-23
 
 ### Changed
-- **UI Update:** Updated the "Favorites List" icon (dropdown) to display three smaller stars instead of a single star, distinguishing it from the "Toggle Favorite" action.
+- **UI Update:** Updated the "Favorites List" icon (dropdown) to display three smaller stars instead of a single star, distinguishing them from the "Toggle Favorite" action.
 - **Version:** Bumped version number to 0.2.1.
 
 ## [0.2.0] - 2024-05-23

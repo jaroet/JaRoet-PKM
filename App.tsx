@@ -517,10 +517,14 @@ function App() {
           } else if (type === 'left') {
             // Bi-directional Related
             const center = await getNote(centralNoteId);
-            if (center) await updateNote(centralNoteId, { relatedTo: [...center.relatedTo, id] });
+            if (center) {
+                await updateNote(centralNoteId, { relatedTo: [...center.relatedTo, id] });
+            }
             
             const target = await getNote(id);
-            if (target) await updateNote(id, { relatedTo: [...target.relatedTo, centralNoteId] });
+            if (target) {
+                await updateNote(id, { relatedTo: [...target.relatedTo, centralNoteId] });
+            }
           }
       }
 
@@ -817,19 +821,21 @@ function App() {
         return;
     }
 
-    if (e.key === ' ') { 
-        e.preventDefault();
-        setFocusedSection('center');
-        return;
-    }
-
     if (e.shiftKey && e.key === 'Enter') {
         e.preventDefault();
         handleOpenEditor();
         return;
     }
 
-    if (e.key === 'Enter') {
+    // NEW LOGIC: Enter = Focus Center (Recenter Focus)
+    if (e.key === 'Enter') { 
+        e.preventDefault();
+        setFocusedSection('center');
+        return;
+    }
+
+    // NEW LOGIC: Space = Open Note (Navigate Into)
+    if (e.key === ' ') {
         e.preventDefault();
         const note = getFocusedNote();
         if (note && note.id !== centralNoteId) {
@@ -1599,10 +1605,10 @@ function App() {
         {/* --- Footer / Status Bar --- */}
         <div style={{ fontSize: `${uiFontSize}px` }} className="h-8 flex-shrink-0 bg-[var(--theme-bars)] flex items-center justify-between px-4 text-foreground z-50 transition-colors duration-300">
             <div className="flex-shrink-0 opacity-90">
-                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.2.10
+                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.2.11
             </div>
             <div className="opacity-60 truncate ml-4 text-right">
-                Arrows: Nav | Space: Recenter | Enter: Focus | Shift+Enter: Edit | Ctrl+Arrows: Link | F2: Rename | Bksp: Unlink
+                Arrows: Nav | Space: Open | Enter: Center Focus | Shift+Enter: Edit | Ctrl+Arrows: Link | F2: Rename | Bksp: Unlink
             </div>
         </div>
 

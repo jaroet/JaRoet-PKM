@@ -9,7 +9,7 @@
 *   **Local & Private:** All data is stored locally in your browser (IndexedDB). Nothing is sent to the cloud.
 *   **Markdown Support:** Full editor with preview support.
 *   **Journaling Engine:** Automated daily note creation with historical linking ("On This Day") and sequential navigation.
-*   **Single File App:** The entire application runs from a single HTML file. No 'installation' needed. 
+*   **Single File App:** The entire application runs from a single HTML file.
 
 ## Documentation
 

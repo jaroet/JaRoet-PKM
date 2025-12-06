@@ -55,8 +55,8 @@ JaRoet PKM is designed to be used primarily with the keyboard.
 
 ### Navigation
 *   **Arrow Keys**: Move focus between notes and sections.
-*   **Space**: Recenter the view on the currently focused note (if navigating peripheral lists).
-*   **Enter**: Make the focused note the new **Active Center Note**.
+*   **Enter**: Recenter the focus on the currently **Active Center Note**.
+*   **Space**: Navigate into the currently focused note (Make it the new **Active Center Note**).
 *   **/**: Focus the Search bar.
 *   **Esc**: Close modals, search, or clear selection.
 
