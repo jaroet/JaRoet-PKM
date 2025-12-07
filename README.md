@@ -27,7 +27,7 @@ I have use different PKM tools like Obsidian, Logseq, The Brain, OneNote, Triliu
 
 In the second half of 2025 I started a new job in a company that has strict rules about what software to install and suddenly I could not use the tools mentioned above anymore. Gone where my years of knowledge gathering and code snippets. Not actually gone but accessing them on a phone, unable to copy-past and the small screen, was not working for me.  
 
-So I thought about building one myself. Thought that before but now, with the AI app builder revolution being underway, I could actually do it. I thought about what I would liked most in all the tools mentioned and my shortlist was the following:
+So I thought about building one myself. I had thought that before but now, with the AI app builder revolution being underway, I could actually do it. I thought about what I liked most in all the tools mentioned and my shortlist was the following:
 
 * **No installation needed**! Just download a file (or a few), copy to a folder and start working.
 * **No cloud storage or internet need**! The app only downloads a few libraries on initial startup, so internet is needed then. But otherwise, no need for the internet.
