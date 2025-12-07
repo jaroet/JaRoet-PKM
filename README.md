@@ -30,8 +30,8 @@ In the second half of 2025 I started a new job in a company that has strict rule
 So I thought about building one myself. I had thought that before but now, with the AI app builder revolution being underway, I could actually do it. I thought about what I liked most in all the tools mentioned and my shortlist was the following:
 
 * **No installation needed**! Just download a file (or a few), copy to a folder and start working.
-* **No cloud storage or internet need**! The app only downloads a few libraries on initial startup, so internet is needed then. But otherwise, no need for the internet and data is stored locally (**IndexedDB)**
-* **A simple app** to use with also a **easy to undertand mental model**. It is just data being entered, searched, linked, edited and read.
+* **No cloud storage or internet need**! The app only downloads a few libraries on initial startup, so internet is needed then. But otherwise, no need for the internet and data is stored locally (**IndexedDB)**.
+* **A simple app** to use with an **easy to undertand mental model**. It is just data being entered, searched, linked, edited and read.
 * **Mardown support** for the notes. Once you use Markdown I find it hard to go back to rich text editors :-).
 * **A visual-ish representation of the data** as the base of the app. I want to see all the different relations of my current focused note.   
 
