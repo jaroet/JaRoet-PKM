@@ -23,7 +23,9 @@ For a detailed guide on how to use the interface, shortcuts, and features, pleas
 
 ## Reasons why I build it
 
-I have use different PKM tools like Obsidian, Logseq, The Brain, OneNote, Trilium Notes, Evernote and Treepad over a long time span and I tried many others. The last year I settled on Obsidian, it was good enough althoug outliners kept drawing me in. In the second half of 2025 I started a new job in a company that has strict rules about what software to install and suddenly I could not use the tools mentioned above anymore. Gone where my years of knowledge gathering and code snippets. Not actually gone but accessing them on a phone, unable to copy-past and the small screen, was not working for me.  
+I have use different PKM tools like Obsidian, Logseq, The Brain, OneNote, Trilium Notes, Evernote and Treepad over a long time span and I tried many others. The last year I settled on Obsidian, it was good enough. 
+
+In the second half of 2025 I started a new job in a company that has strict rules about what software to install and suddenly I could not use the tools mentioned above anymore. Gone where my years of knowledge gathering and code snippets. Not actually gone but accessing them on a phone, unable to copy-past and the small screen, was not working for me.  
 
 So I thought about building one myself. Thought that before but now, with the AI app builder revolution being underway, I could actually do it. I thought about what I would liked most in all the tools mentioned and my shortlist was the following:
 
