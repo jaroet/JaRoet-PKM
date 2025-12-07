@@ -37,4 +37,6 @@ So I thought about building one myself. I had thought that before but now, with 
 
 With these minimal requirements set I started up AIStudio.google.com and started prompting. The results came fast and where of a quality I could not have done myself. I kept on trying and the result is the JaRoet-PKM tool. I invite you to try it and add to the [discussions](https://github.com/jaroet/JaRoet-PKM/discussions) if you have remarks, questions or suggestions. 
 
-This is project run in the spare evening hours but I will try to respond quickly. AI is a great time-saver, I started only a few days ago, but not infallible. So let me know if you find any bugs (use the [issue tracker](https://github.com/jaroet/JaRoet-PKM/issues). 
+This is project run in the spare evening hours but I will try to respond quickly. AI is a great time-saver, I started only a few days ago, but not infallible. So let me know if you find any bugs (use the [issue tracker](https://github.com/jaroet/JaRoet-PKM/issues) to log them.
+
+Enjoy !!!
