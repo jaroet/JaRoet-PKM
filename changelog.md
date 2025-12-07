@@ -2,6 +2,12 @@
 
 All notable changes to the JaRoet PKM project will be documented in this file.
 
+## [0.2.12] - 2024-05-23
+
+### Fixed
+- **Hotkey Conflict:** Fixed a bug where `Shift+Enter` (Edit Note) was being intercepted by `Enter` (Center Focus). The editor can now be opened correctly with the hotkey in all environments.
+- **Version:** Bumped version number to 0.2.12.
+
 ## [0.2.11] - 2024-05-23
 
 ### Changed

@@ -2078,16 +2078,17 @@
                 return;
             }
 
+            // Priority Fix: Check Shift+Enter (Open Editor) BEFORE checking plain Enter (Focus Center)
+            if (e.shiftKey && e.key === 'Enter') {
+                e.preventDefault();
+                handleOpenEditor();
+                return;
+            }
+
             // NEW LOGIC: Enter = Focus Center (Recenter Focus)
             if (e.key === 'Enter') { 
                 e.preventDefault();
                 setFocusedSection('center');
-                return;
-            }
-
-            if (e.shiftKey && e.key === 'Enter') {
-                e.preventDefault();
-                handleOpenEditor();
                 return;
             }
 
@@ -2638,7 +2639,7 @@
                     }}
                 />
                 {isSearchActive && searchResults.length > 0 && (
-                    <div ref={searchResultsRef} className="absolute top-full left-0 right-0 bg-card text-foreground border border-gray-200 dark:border-gray-700 shadow-xl rounded-b-md mt-1 z-50 max-h-96 overflow-y-auto">
+                    <div ref={searchResultsRef} className="absolute top-full left-0 right-0 bg-card text-foreground border border-gray-200 dark:border-gray-700 shadow-xl rounded-b mt-1 z-50 max-h-96 overflow-y-auto">
                         {searchResults.map((res, idx) => (
                             <div 
                                 key={res.id} 
@@ -2779,7 +2780,7 @@
         
         <div style={{ fontSize: `${uiFontSize}px` }} className="h-8 flex-shrink-0 bg-[var(--theme-bars)] flex items-center justify-between px-4 text-foreground z-50 transition-colors duration-300">
             <div className="flex-shrink-0 opacity-90">
-                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.2.11
+                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.2.12
             </div>
             <div className="opacity-60 truncate ml-4 text-right">
                 Arrows: Nav | Space: Open | Enter: Center Focus | Shift+Enter: Edit | Ctrl+Arrows: Link | F2: Rename | Bksp: Unlink

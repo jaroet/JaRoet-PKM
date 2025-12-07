@@ -821,6 +821,7 @@ function App() {
         return;
     }
 
+    // Priority Fix: Check Shift+Enter (Open Editor) BEFORE checking plain Enter (Focus Center)
     if (e.shiftKey && e.key === 'Enter') {
         e.preventDefault();
         handleOpenEditor();
@@ -1605,7 +1606,7 @@ function App() {
         {/* --- Footer / Status Bar --- */}
         <div style={{ fontSize: `${uiFontSize}px` }} className="h-8 flex-shrink-0 bg-[var(--theme-bars)] flex items-center justify-between px-4 text-foreground z-50 transition-colors duration-300">
             <div className="flex-shrink-0 opacity-90">
-                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.2.11
+                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.2.12
             </div>
             <div className="opacity-60 truncate ml-4 text-right">
                 Arrows: Nav | Space: Open | Enter: Center Focus | Shift+Enter: Edit | Ctrl+Arrows: Link | F2: Rename | Bksp: Unlink
