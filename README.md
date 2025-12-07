@@ -27,11 +27,11 @@ I have use different PKM tools like Obsidian, Logseq, The Brain, OneNote, Triliu
 
 So I thought about building one myself. Thought that before but now, with the AI app builder revolution being underway, I could actually do it. I thought about what I would liked most in all the tools mentioned and my shortlist was the following:
 
-* No installation needed! Just download a file (or a few), copy to a folder and start working.
-* No cloud storage or internet need! The app only downloads a few libraries on initial startup, so internet is needed then. But otherwise, no need for the internet.
-* A simple app to use with also a simple mental model to understand. It is just data being entered, searched, linked, edited and read.
-* Mardown support for the notes. Once you use Markdown I find it hard to go back to rich text editors :-).
-* A visual-ish representation of my data as the base of the app. I want to see all the different relations of my current focused note.   
+* **No installation needed**! Just download a file (or a few), copy to a folder and start working.
+* **No cloud storage or internet need**! The app only downloads a few libraries on initial startup, so internet is needed then. But otherwise, no need for the internet.
+* **A simple app** to use with also a **easy to undertand mental model**. It is just data being entered, searched, linked, edited and read.
+* **Mardown support** for the notes. Once you use Markdown I find it hard to go back to rich text editors :-).
+* **A visual-ish representation of the data** as the base of the app. I want to see all the different relations of my current focused note.   
 
 With these minimal requirements set I started up AIStudio.google.com and started prompting. The results came fast and where of a quality I could not have done myself. I kept on trying and the result is the JaRoet-PKM tool. I invite you to try it and add to the [discussions](https://github.com/jaroet/JaRoet-PKM/discussions) if you have remarks, questions or suggestions. 
 
