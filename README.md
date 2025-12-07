@@ -1,6 +1,6 @@
 # JaRoet PKM
 
-**JaRoet PKM** is a fast, local-first Personal Knowledge Management tool designed for keyboard power users. It moves away from traditional folder structures, organizing your notes based on their relationships (Parents, Children, Siblings, and Related items). This creates a natural "topology" of thought that you can navigate fluidly.
+**JaRoet PKM** is a fast, local-first Personal Knowledge Management tool designed for keyboard power users. It moves away from traditional folder structures, organizing your notes based on their relationships (Parents, Children, Siblings, and Related items). This creates a natural "topology" of thought that you can navigate fluidly. It is inspired mainly by The Brain, Obsidian and Logseq. 
 
 ## Key Features
 
