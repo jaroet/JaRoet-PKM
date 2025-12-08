@@ -41,6 +41,11 @@ renderer.link = function(hrefOrObj: string | { href: string; title?: string; tex
     return output;
 };
 
+// Enable checkboxes for tasks
+renderer.checkbox = function(checked) {
+    return `<input type="checkbox" ${checked ? 'checked="" ' : ''} class="task-list-item-checkbox" disabled>`;
+};
+
 marked.use({ renderer });
 
 function App() {
@@ -86,6 +91,7 @@ function App() {
   const [isSearchActive, setIsSearchActive] = useState(false);
   
   const [editorOpen, setEditorOpen] = useState(false);
+  const [editorMode, setEditorMode] = useState<'view' | 'edit'>('view');
   
   const [linkerOpen, setLinkerOpen] = useState(false);
   const [linkerType, setLinkerType] = useState<'up' | 'down' | 'left'>('up');
@@ -378,9 +384,12 @@ function App() {
     }
   };
 
-  const handleOpenEditor = () => {
+  const handleOpenEditor = (mode: 'view' | 'edit') => {
     const note = getFocusedNote();
-    if (note) setEditorOpen(true);
+    if (note) {
+        setEditorMode(mode);
+        setEditorOpen(true);
+    }
   };
 
   const goHome = useCallback(async () => {
@@ -821,10 +830,17 @@ function App() {
         return;
     }
 
-    // Priority Fix: Check Shift+Enter (Open Editor) BEFORE checking plain Enter (Focus Center)
-    if (e.shiftKey && e.key === 'Enter') {
+    // Shift+Enter: Open Editor in View Mode
+    if (e.shiftKey && e.key === 'Enter' && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
-        handleOpenEditor();
+        handleOpenEditor('view');
+        return;
+    }
+
+    // Ctrl+Enter: Open Editor in Edit Mode
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleOpenEditor('edit');
         return;
     }
 
@@ -1340,7 +1356,7 @@ function App() {
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill={activeNote?.isFavorite ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
                 </button>
                 <button 
-                    onClick={handleOpenEditor} 
+                    onClick={() => handleOpenEditor('view')} 
                     title="View Content (Shift+Enter)" 
                     className={`p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${
                         activeNoteHasContent 
@@ -1606,7 +1622,7 @@ function App() {
         {/* --- Footer / Status Bar --- */}
         <div style={{ fontSize: `${uiFontSize}px` }} className="h-8 flex-shrink-0 bg-[var(--theme-bars)] flex items-center justify-between px-4 text-foreground z-50 transition-colors duration-300">
             <div className="flex-shrink-0 opacity-90">
-                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.2.12
+                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.2.14
             </div>
             <div className="opacity-60 truncate ml-4 text-right">
                 Arrows: Nav | Space: Open | Enter: Center Focus | Shift+Enter: Edit | Ctrl+Arrows: Link | F2: Rename | Bksp: Unlink
@@ -1624,6 +1640,7 @@ function App() {
       />
       <MarkdownEditor 
         isOpen={editorOpen}
+        initialMode={editorMode}
         note={getFocusedNote()}
         onClose={() => setEditorOpen(false)}
         onSave={(id, content) => {

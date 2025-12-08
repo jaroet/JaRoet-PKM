@@ -2,6 +2,13 @@
 
 All notable changes to the JaRoet PKM project will be documented in this file.
 
+## [0.2.13] - 2024-05-23
+
+### Fixed
+- **Markdown Editor Flicker:** Fixed a bug where switching from Edit to View mode (Shift+Enter) would momentarily flicker back to Edit mode if the editor was opened in Edit mode. This was caused by the editor state resetting when the note saved.
+- **Editor Focus:** When entering Edit mode, the cursor is now automatically placed at the end of the text and the view scrolled to the bottom.
+- **Event Bubbling:** Added event propagation stopping to the editor to prevent key presses from triggering background app navigation.
+
 ## [0.2.12] - 2024-05-23
 
 ### Fixed

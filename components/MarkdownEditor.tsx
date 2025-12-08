@@ -5,15 +5,16 @@ import { Note } from '../types';
 interface MarkdownEditorProps {
   note: Note | null;
   isOpen: boolean;
+  initialMode: 'view' | 'edit';
   onClose: () => void;
   onSave: (id: string, content: string) => void;
 }
 
-// Configure marked to open external links in a new tab with icon
-const renderer = new marked.Renderer();
+// Define a specific renderer for the editor to ensure isolation from global defaults
+const editorRenderer = new marked.Renderer();
 
-// Robust adapter for different marked versions (args vs object)
-renderer.link = function(hrefOrObj: string | { href: string; title?: string; text: string }, title?: string | null, text?: string) {
+// Link handling (same as global, opens in new tab)
+editorRenderer.link = function(hrefOrObj: string | { href: string; title?: string; text: string }, title?: string | null, text?: string) {
     let href: string = '';
     let linkTitle: string | null | undefined = title;
     let linkText: string = text || '';
@@ -40,41 +41,54 @@ renderer.link = function(hrefOrObj: string | { href: string; title?: string; tex
     return output;
 };
 
-marked.use({ renderer });
+// Enabled checkboxes with styling for the editor
+editorRenderer.checkbox = function(checked) {
+    // added margin-right for spacing, vertical-align for alignment
+    return `<input type="checkbox" ${checked ? 'checked="" ' : ''} class="task-list-item-checkbox" style="cursor: pointer; margin-right: 0.6em; vertical-align: middle;">`;
+};
 
-const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, onClose, onSave }) => {
+const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, initialMode, onClose, onSave }) => {
   const [content, setContent] = useState('');
   const [parsedHtml, setParsedHtml] = useState('');
-  const [isPreview, setIsPreview] = useState(true); // Default
+  const [isPreview, setIsPreview] = useState(initialMode === 'view');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
 
-  // Initialize state when modal opens
+  // Initialize state when modal opens or note ID changes
   useEffect(() => {
     if (note && isOpen) {
-      const hasContent = note.content && note.content.trim().length > 0;
       setContent(note.content || '');
-      
-      // Show preview if content exists, otherwise edit mode
-      setIsPreview(hasContent);
+      setIsPreview(initialMode === 'view');
       
       // Focus appropriate element
       setTimeout(() => {
-          if (hasContent) {
+          if (initialMode === 'view') {
               previewRef.current?.focus();
           } else {
-              textareaRef.current?.focus();
+              const el = textareaRef.current;
+              if (el) {
+                  el.focus();
+                  // Move cursor to end
+                  const len = el.value.length;
+                  el.setSelectionRange(len, len);
+                  el.scrollTop = el.scrollHeight;
+              }
           }
       }, 100);
     }
-  }, [note, isOpen]);
+  }, [note?.id, isOpen]); 
 
   // Parse markdown whenever content changes
   useEffect(() => {
     const parse = async () => {
         try {
-            const html = await marked.parse(content || '', { breaks: true, gfm: true });
+            // Explicitly pass renderer to override any global config that disables checkboxes
+            const html = await marked.parse(content || '', { 
+                breaks: true, 
+                gfm: true,
+                renderer: editorRenderer 
+            });
             setParsedHtml(html);
         } catch (e) {
             console.error('Markdown parse error:', e);
@@ -85,20 +99,63 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, onClose, 
     return () => clearTimeout(timeout);
   }, [content]);
 
-  const handleToggleMode = () => {
-      if (isPreview) {
-          // Switch to Edit Mode
-          setIsPreview(false);
-          setTimeout(() => textareaRef.current?.focus(), 50);
-      } else {
-          // Switch to View Mode -> Save Content
-          if (note) onSave(note.id, content);
-          setIsPreview(true);
-          setTimeout(() => previewRef.current?.focus(), 50);
+  const toggleTask = (index: number) => {
+    if (!note) return;
+    // Regex to find tasks: matches "- [ ]", "* [x]", etc.
+    const regex = /^(\s*[-*+]\s+\[)([ xX])(\])/gm;
+    let currentIndex = 0;
+    
+    const newContent = content.replace(regex, (match, prefix, state, suffix) => {
+        if (currentIndex === index) {
+            const newState = state === ' ' ? 'x' : ' ';
+            currentIndex++; 
+            return `${prefix}${newState}${suffix}`;
+        }
+        currentIndex++;
+        return match;
+    });
+
+    if (newContent !== content) {
+        setContent(newContent);
+        onSave(note.id, newContent);
+    }
+  };
+
+  const handlePreviewClick = (e: React.MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' && (target as HTMLInputElement).type === 'checkbox') {
+           const checkboxes = previewRef.current?.querySelectorAll('input[type="checkbox"]');
+           if (checkboxes) {
+               const index = Array.from(checkboxes).indexOf(target as HTMLInputElement);
+               if (index !== -1) {
+                   toggleTask(index);
+               }
+           }
       }
   };
 
+  const switchToEdit = () => {
+      setIsPreview(false);
+      setTimeout(() => {
+          const el = textareaRef.current;
+          if (el) {
+              el.focus();
+              const len = el.value.length;
+              el.setSelectionRange(len, len);
+              el.scrollTop = el.scrollHeight;
+          }
+      }, 50);
+  };
+
+  const switchToView = () => {
+      if (note) onSave(note.id, content);
+      setIsPreview(true);
+      setTimeout(() => previewRef.current?.focus(), 50);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    e.stopPropagation(); // Stop global listeners
+
     // ESC - Close without saving
     if (e.key === 'Escape') {
       e.preventDefault();
@@ -106,18 +163,30 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, onClose, 
       return;
     }
     
-    // Ctrl+Enter / Cmd+Enter - Toggle Mode
-    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'Enter') {
+    // Ctrl+Enter
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        handleToggleMode();
+        if (isPreview) {
+            // If in View Mode -> Switch to Edit Mode
+            switchToEdit();
+        } else {
+            // If in Edit Mode -> Close without saving (Cancel/Esc)
+            onClose();
+        }
         return;
     }
 
-    // Ctrl+Shift+Enter - Save and Close
-    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'Enter') {
+    // Shift+Enter
+    if (e.shiftKey && e.key === 'Enter' && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
-        if (note) onSave(note.id, content);
-        onClose();
+        if (isPreview) {
+            // If in View Mode -> Close
+            onClose();
+        } else {
+             // If in Edit Mode -> Save & Switch to View Mode
+             switchToView();
+        }
+        return;
     }
   };
 
@@ -125,9 +194,28 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, onClose, 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+       {/* CSS override for compact lists in this specific editor instance */}
+      <style>{`
+        .editor-preview ul, .editor-preview ol {
+            margin-top: 0.25em !important;
+            margin-bottom: 0.25em !important;
+        }
+        .editor-preview li {
+            margin-top: 0 !important;
+            margin-bottom: 0 !important;
+        }
+        .editor-preview li > p {
+            margin-top: 0 !important;
+            margin-bottom: 0 !important;
+        }
+        .editor-preview li.task-list-item {
+            list-style-type: none;
+            padding-left: 0;
+        }
+      `}</style>
+
       <div 
         ref={containerRef}
-        // Use -1 so it doesn't trap tab focus but can catch bubbles
         tabIndex={-1} 
         onKeyDown={handleKeyDown}
         className="w-full max-w-[90vw] h-[90vh] bg-[var(--theme-bg)] rounded-lg shadow-2xl flex flex-col border border-gray-200 dark:border-gray-800 outline-none"
@@ -136,22 +224,23 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, onClose, 
           <h2 className="text-xl font-bold truncate pr-4">{note.title}</h2>
           <div className="flex gap-2 flex-shrink-0">
             <button
-              onClick={handleToggleMode}
-              title="Ctrl+Enter"
+              onClick={() => isPreview ? switchToEdit() : switchToView()}
+              title={isPreview ? "Switch to Edit (Ctrl+Enter)" : "Switch to View (Shift+Enter)"}
               className="px-3 py-1 rounded bg-gray-200 dark:bg-gray-700 hover:opacity-80 text-sm min-w-[80px]"
             >
               {isPreview ? 'Edit' : 'Preview'}
             </button>
-            <button
-              onClick={() => {
-                onSave(note.id, content);
-                onClose();
-              }}
-              title="Ctrl+Shift+Enter"
-              className="px-3 py-1 rounded bg-primary text-white hover:opacity-80 text-sm"
-            >
-              Save & Close
-            </button>
+            {!isPreview && (
+                <button
+                onClick={() => {
+                    onSave(note.id, content);
+                    onClose();
+                }}
+                className="px-3 py-1 rounded bg-primary text-white hover:opacity-80 text-sm"
+                >
+                Save & Close
+                </button>
+            )}
              <button
               onClick={onClose}
               title="Esc"
@@ -167,7 +256,9 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, onClose, 
                 <div 
                     ref={previewRef}
                     tabIndex={0}
-                    className="w-full h-full p-6 overflow-auto prose dark:prose-invert max-w-none custom-scrollbar select-text outline-none"
+                    onClick={handlePreviewClick}
+                    style={{ fontSize: '15px' }}
+                    className="editor-preview w-full h-full p-6 overflow-auto prose dark:prose-invert max-w-none custom-scrollbar select-text outline-none"
                     dangerouslySetInnerHTML={{ __html: parsedHtml }}
                 />
             ) : (
@@ -175,15 +266,16 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, onClose, 
                     ref={textareaRef}
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
-                    className="w-full h-full p-6 bg-transparent resize-none outline-none font-mono text-base custom-scrollbar"
+                    style={{ fontSize: '15px' }}
+                    className="w-full h-full p-6 bg-transparent resize-none outline-none font-mono custom-scrollbar"
                     placeholder="Type markdown here..."
                 />
             )}
         </div>
         <div className="p-2 text-xs text-gray-500 border-t dark:border-gray-700 text-center bg-background/50 rounded-b-lg">
             {isPreview 
-                ? 'View Mode • Ctrl+Enter to Edit • Esc to Close' 
-                : 'Edit Mode • Ctrl+Enter to Save & Preview • Ctrl+Shift+Enter to Save & Close • Esc to Cancel'
+                ? 'View Mode • Ctrl+Enter: Edit • Shift+Enter: Close • Esc: Close' 
+                : 'Edit Mode • Shift+Enter: Save & View • Ctrl+Enter: Cancel & Close • Esc: Cancel & Close'
             }
         </div>
       </div>
