@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NexusNode Data Generator</title>
+    <title>JaRoet PKM - Real Data Generator</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -22,11 +22,26 @@
             padding: 2rem;
             border-radius: 1rem;
             box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-            max-width: 500px;
+            max-width: 600px;
             width: 90%;
         }
         h1 { margin-top: 0; color: #3b82f6; }
-        p { color: #64748b; margin-bottom: 2rem; }
+        p { color: #64748b; margin-bottom: 2rem; line-height: 1.6; }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            text-align: left;
+        }
+        .stat-box {
+            background: #f1f5f9;
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+        }
+        .stat-label { font-size: 0.75rem; color: #64748b; text-transform: uppercase; }
+        .stat-val { font-size: 1.25rem; font-weight: bold; color: #0f172a; }
+        
         button {
             background-color: #3b82f6;
             color: white;
@@ -37,24 +52,85 @@
             font-weight: 600;
             cursor: pointer;
             transition: background-color 0.2s;
+            width: 100%;
         }
         button:hover { background-color: #2563eb; }
         button:disabled { background-color: #94a3b8; cursor: not-allowed; }
-        #status { margin-top: 1rem; font-size: 0.875rem; min-height: 1.5em; }
+        
+        #log {
+            margin-top: 1.5rem;
+            font-family: monospace;
+            font-size: 0.875rem;
+            background: #1e293b;
+            color: #4ade80;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            text-align: left;
+            height: 150px;
+            overflow-y: auto;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .progress-bar {
+            height: 6px;
+            background: #e2e8f0;
+            border-radius: 3px;
+            margin-top: 1rem;
+            overflow: hidden;
+            width: 100%;
+        }
+        .progress-fill {
+            height: 100%;
+            background: #3b82f6;
+            width: 0%;
+            transition: width 0.3s;
+        }
     </style>
 </head>
 <body>
     <div class="card">
-        <h1>Dataset Generator</h1>
-        <p>Generate a large JSON dataset (1,200+ notes) to stress test the NexusNode application. This creates a realistic graph with hierarchies and lateral connections.</p>
-        <button id="generateBtn">Generate & Download 1.2k Notes</button>
-        <div id="status"></div>
+        <h1>Real World Data Generator</h1>
+        <p>
+            This tool fetches <b>real data</b> from public APIs to build a stress-test dataset. 
+            It creates a graph of The World, Continents, Organizations, Countries, and Real Cities.
+        </p>
+        
+        <div class="stats-grid">
+            <div class="stat-box">
+                <div class="stat-label">Est. Countries</div>
+                <div class="stat-val">~250</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Cities/Country</div>
+                <div class="stat-val">30</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Total Notes</div>
+                <div class="stat-val">~7,500</div>
+            </div>
+        </div>
+
+        <button id="startBtn">Start Generation & Download</button>
+        
+        <div class="progress-bar">
+            <div id="progress" class="progress-fill"></div>
+        </div>
+        <div id="log">Ready to generate...</div>
     </div>
 
     <script>
-        const CATEGORIES = ['Astronomy', 'Quantum Physics', 'History of Rome', 'Sourdough Baking', 'Machine Learning', 'Gardening', 'Philosophy', 'Web Development'];
-        const PREFIXES = ['Introduction to', 'Advanced', 'The paradox of', 'History of', 'Notes on', 'Analysis:', 'Project:', 'Thought:'];
-        const LOREM = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.";
+        const logEl = document.getElementById('log');
+        const progressEl = document.getElementById('progress');
+        const btn = document.getElementById('startBtn');
+
+        function log(msg) {
+            logEl.innerHTML += `<div>> ${msg}</div>`;
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        function setProgress(percent) {
+            progressEl.style.width = `${percent}%`;
+        }
 
         function uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -63,125 +139,216 @@
             });
         }
 
-        function randomInt(min, max) {
-            return Math.floor(Math.random() * (max - min + 1)) + min;
+        async function fetchData() {
+            try {
+                // 1. Fetch Countries Data (Stats, Orgs, Continents)
+                log("Fetching Country & Organization data (RestCountries API)...");
+                const restRes = await fetch('https://restcountries.com/v3.1/all');
+                if (!restRes.ok) throw new Error("Failed to fetch RestCountries");
+                const countriesData = await restRes.json();
+                setProgress(10);
+                log(`Fetched metadata for ${countriesData.length} countries.`);
+
+                // 2. Fetch Cities Data
+                log("Fetching City lists (CountriesNow API)...");
+                const citiesRes = await fetch('https://countriesnow.space/api/v0.1/countries');
+                if (!citiesRes.ok) throw new Error("Failed to fetch CountriesNow");
+                const citiesData = await citiesRes.json();
+                setProgress(30);
+                log(`Fetched city lists for ${citiesData.data.length} countries.`);
+
+                return { countries: countriesData, cities: citiesData.data };
+            } catch (e) {
+                log(`ERROR: ${e.message}`);
+                alert("API Error. Please try again or check your internet connection.");
+                return null;
+            }
         }
 
-        function randomItem(arr) {
-            return arr[Math.floor(Math.random() * arr.length)];
-        }
-
-        document.getElementById('generateBtn').addEventListener('click', async () => {
-            const btn = document.getElementById('generateBtn');
-            const status = document.getElementById('status');
-            
+        btn.addEventListener('click', async () => {
             btn.disabled = true;
-            status.textContent = "Generating topology...";
+            log("Starting generation process...");
+            setProgress(5);
 
-            // Use setTimeout to allow UI to update before heavy processing
-            setTimeout(() => {
-                const notes = [];
-                const now = Date.now();
-                
-                // 1. Create Root Hubs (The Categories)
-                const hubs = [];
-                CATEGORIES.forEach(cat => {
-                    const id = uuid();
-                    hubs.push({ id, title: cat });
-                    notes.push({
-                        id: id,
-                        title: cat,
-                        content: `# ${cat}\n\nThis is a main category hub.\n\n${LOREM}`,
-                        linksTo: [],
-                        relatedTo: [],
-                        isFavorite: true,
-                        createdAt: now,
-                        modifiedAt: now
-                    });
+            const rawData = await fetchData();
+            if (!rawData) {
+                btn.disabled = false;
+                return;
+            }
+
+            const NOTES = [];
+            const ID_MAP = new Map(); // Name -> ID
+            const now = Date.now();
+
+            // Helper to create note
+            const createNote = (title, content, linksTo = [], relatedTo = []) => {
+                const id = uuid();
+                ID_MAP.set(title, id);
+                NOTES.push({
+                    id,
+                    title,
+                    content,
+                    linksTo,
+                    relatedTo,
+                    isFavorite: false,
+                    createdAt: now,
+                    modifiedAt: now
                 });
+                return id;
+            };
 
-                // 2. Create Sub-nodes
-                const TOTAL_NOTES = 1200;
-                const createdIds = [...hubs.map(h => h.id)];
+            // 1. Create World Root
+            log("Creating World Root...");
+            const worldId = createNote("The World", "# The World\n\nOur home planet. Contains 7 continents and over 195 countries.");
+            
+            // 2. Process Continents
+            const continents = new Set();
+            rawData.countries.forEach(c => {
+                if (c.region) continents.add(c.region);
+            });
+            
+            const continentIds = {};
+            continents.forEach(cont => {
+                continentIds[cont] = createNote(cont, `# ${cont}\n\nA continent on Earth.`);
+                // World links to Continent
+                const worldNote = NOTES.find(n => n.id === worldId);
+                worldNote.linksTo.push(continentIds[cont]);
+            });
+            setProgress(40);
 
-                for (let i = 0; i < TOTAL_NOTES; i++) {
-                    const id = uuid();
-                    createdIds.push(id);
-                    
-                    const hub = randomItem(hubs);
-                    const title = `${randomItem(PREFIXES)} ${hub.title} ${i}`;
-                    
-                    notes.push({
-                        id: id,
-                        title: title,
-                        content: `# ${title}\n\nParent Category: [[${hub.title}]]\n\n## Details\n${LOREM}\n${LOREM}\n\n## References\n- Reference A\n- Reference B`,
-                        linksTo: [],
-                        relatedTo: [],
-                        isFavorite: Math.random() < 0.02, // 2% chance of favorite
-                        createdAt: now - randomInt(0, 10000000),
-                        modifiedAt: now
+            // 3. Process Organizations (Regional Blocs)
+            log("Processing Organizations...");
+            const orgs = {}; // Acronym -> { name, id, memberCount }
+            
+            rawData.countries.forEach(c => {
+                if (c.regionalBlocs) {
+                    c.regionalBlocs.forEach(bloc => {
+                        if (!orgs[bloc.acronym]) {
+                            const id = createNote(bloc.name, `# ${bloc.name} (${bloc.acronym})\n\nA regional organization.`);
+                            orgs[bloc.acronym] = { name: bloc.name, id, members: [] };
+                        }
+                    });
+                }
+            });
+
+            // 4. Process Countries
+            log("Building Countries & Linking Cities...");
+            let processedCountries = 0;
+            const totalC = rawData.countries.length;
+
+            rawData.countries.forEach(c => {
+                const name = c.name.common;
+                const region = c.region;
+                
+                // Format Numbers
+                const pop = c.population ? c.population.toLocaleString() : 'Unknown';
+                const area = c.area ? c.area.toLocaleString() + ' km²' : 'Unknown';
+                const capital = c.capital ? c.capital[0] : 'N/A';
+                const currencies = c.currencies ? Object.values(c.currencies).map(x => `${x.name} (${x.symbol})`).join(', ') : 'N/A';
+                const languages = c.languages ? Object.values(c.languages).join(', ') : 'N/A';
+                const flag = c.flags ? c.flags.png : '';
+
+                // Build Markdown Content
+                const content = `
+# ${name}
+
+![Flag](${flag})
+
+**Capital:** ${capital}  
+**Region:** ${region}  
+**Population:** ${pop}  
+**Area:** ${area}
+
+| Statistic | Value |
+|---|---|
+| **Currencies** | ${currencies} |
+| **Languages** | ${languages} |
+| **FIFA Code** | ${c.fifa || 'N/A'} |
+
+## Description
+${name} is a country located in **${region}**. It has a population of approximately ${pop}.
+
+## External Resources
+* [Open on Google Maps](${c.maps.googleMaps})
+`;
+                const countryId = createNote(name, content);
+
+                // Link Continent (Parent) -> Country (Child)
+                if (region && continentIds[region]) {
+                    const contNote = NOTES.find(n => n.id === continentIds[region]);
+                    contNote.linksTo.push(countryId);
+                }
+
+                // Link Organizations (Related)
+                if (c.regionalBlocs) {
+                    c.regionalBlocs.forEach(bloc => {
+                        if (orgs[bloc.acronym]) {
+                            const orgNote = NOTES.find(n => n.id === orgs[bloc.acronym].id);
+                            // Lateral link: Org related to Country
+                            orgNote.relatedTo.push(countryId);
+                            // Also link Country related to Org (Bi-directional handled by app, but good for raw data)
+                            const countryNote = NOTES.find(n => n.id === countryId);
+                            countryNote.relatedTo.push(orgNote.id);
+                        }
                     });
                 }
 
-                // 3. Create Topology (Links)
-                status.textContent = "Linking nodes...";
+                // 5. Process Cities (Children)
+                // Find matching city list
+                const cityEntry = rawData.cities.find(entry => entry.country === name || entry.country.includes(name));
                 
-                notes.forEach(note => {
-                    const isHub = hubs.find(h => h.id === note.id);
-                    
-                    if (isHub) {
-                        // Hubs link to 20-50 random notes (Downers)
-                        const count = randomInt(20, 50);
-                        for(let i=0; i<count; i++) {
-                            const target = randomItem(createdIds);
-                            if(target !== note.id && !note.linksTo.includes(target)) {
-                                note.linksTo.push(target);
-                            }
-                        }
-                    } else {
-                        // Regular notes
+                if (cityEntry && cityEntry.cities && cityEntry.cities.length > 0) {
+                    // Limit to top 30 cities to keep file size sane but "large"
+                    const citiesToadd = cityEntry.cities.slice(0, 30);
+                    const countryNote = NOTES.find(n => n.id === countryId);
+
+                    citiesToadd.forEach(cityName => {
+                        // Avoid duplicates if city same name as country
+                        if (cityName === name) return;
+
+                        // Create City Note
+                        // We simulate stats for cities as bulk API for that is premium/scarce
+                        const simPop = Math.floor(Math.random() * 500000) + 50000;
+                        const cityContent = `# ${cityName}
+
+**Country:** [[${name}]]  
+**Population (Est):** ${simPop.toLocaleString()}
+
+${cityName} is a city located in **${name}**.
+
+`;
+                        const cityId = createNote(cityName, cityContent);
                         
-                        // 80% chance to link to a Hub (making the hub a Parent/Upper of this note)
-                        // Actually, in this data model, "linksTo" defines Downers.
-                        // So if we want Hub to be Parent (Upper), Hub must link TO this note.
-                        // We handled that above (Hubs link to random notes).
-                        
-                        // Let's make this note link TO other notes (create Downers for this note)
-                        const downerCount = randomInt(0, 3);
-                        for(let i=0; i<downerCount; i++) {
-                            const target = randomItem(createdIds);
-                            if(target !== note.id && !note.linksTo.includes(target)) {
-                                note.linksTo.push(target);
-                            }
-                        }
+                        // Link Country -> City
+                        countryNote.linksTo.push(cityId);
+                    });
+                }
 
-                        // Lateral links (Lefters) - 30% chance
-                        if (Math.random() > 0.7) {
-                             const lefterCount = randomInt(1, 3);
-                             for(let i=0; i<lefterCount; i++) {
-                                const target = randomItem(createdIds);
-                                if(target !== note.id && !note.relatedTo.includes(target) && !note.linksTo.includes(target)) {
-                                    note.relatedTo.push(target);
-                                }
-                            }
-                        }
-                    }
-                });
+                processedCountries++;
+                if (processedCountries % 20 === 0) {
+                    setProgress(40 + Math.floor((processedCountries / totalC) * 50));
+                }
+            });
 
-                // 4. Download
-                const blob = new Blob([JSON.stringify(notes, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `nexusnode_large_dataset_${now}.json`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
+            setProgress(95);
+            log(`Graph constructed. Total Notes: ${NOTES.length}`);
 
-                status.textContent = `Done! Generated ${notes.length} notes.`;
-                btn.disabled = false;
-            }, 100);
+            // Download
+            log("Generating JSON file...");
+            const blob = new Blob([JSON.stringify(NOTES, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `JaRoet_RealWorld_${NOTES.length}_Notes.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            setProgress(100);
+            log("Download started!");
+            btn.disabled = false;
+            btn.textContent = "Generate Again";
         });
     </script>
 </body>

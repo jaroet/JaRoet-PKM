@@ -290,18 +290,17 @@ function App() {
       return [...notes].sort((a, b) => a.title.localeCompare(b.title));
   }, [topology, favorites]);
 
-  const getFocusedNote = useCallback((): Note | null => {
+  const getFocusedNote = useCallback(() => {
     if (focusedSection === 'content') return topology.center;
     if (focusedSection === 'center') return topology.center;
     const notes = getSortedNotes(focusedSection);
     return notes[focusedIndex] || null;
   }, [focusedSection, focusedIndex, getSortedNotes, topology]);
 
-  // --- Markdown Preview Effect ---
+  // Update Preview when focus changes
   useEffect(() => {
       const updatePreview = async () => {
           const target = getFocusedNote() || topology.center;
-          
           if (target && target.content) {
               try {
                 const html = await marked.parse(target.content, { breaks: true, gfm: true });
@@ -313,38 +312,33 @@ function App() {
               setPreviewHtml('<p class="text-gray-500 italic">No content</p>');
           }
       };
-      
       const t = setTimeout(updatePreview, 100);
       return () => clearTimeout(t);
   }, [focusedSection, focusedIndex, topology, favorites]);
 
 
-  // --- Focus Integrity (Clamping) ---
+  // Ensure focus index is valid when topology changes
   useEffect(() => {
-    // Safety check if hidden sections are focused (though keyboard logic prevents this, mouse or weird state might cause it)
+    // Safety check if hidden sections are focused
     if (focusedSection === 'favs' && !showFavorites) {
         setFocusedSection('left');
         setFocusedIndex(0);
         return;
     }
-    // FIX: Moved this check before the early return to ensure we can switch focus away from content if it gets hidden
     if (focusedSection === 'content' && !showContent) {
         setFocusedSection('right');
         setFocusedIndex(0);
         return;
     }
-    
+
     if (focusedSection === 'center' || focusedSection === 'content') return;
 
     const notes = getSortedNotes(focusedSection);
-    // If section is empty but we are focused on it, move to center
     if (notes.length === 0) {
         setFocusedSection('center');
         setFocusedIndex(0);
         return;
     }
-    
-    // If index is out of bounds, clamp it
     if (focusedIndex >= notes.length) {
         setFocusedIndex(notes.length - 1);
     }
@@ -357,7 +351,7 @@ function App() {
     const note = getFocusedNote();
     if (note) {
       await toggleFavorite(note.id);
-      loadTopology(centralNoteId!); // Reload to update UI
+      loadTopology(centralNoteId!);
       refreshFavorites();
     }
   };
@@ -395,36 +389,33 @@ function App() {
   const goHome = useCallback(async () => {
     const homeId = await getHomeNoteId();
     if (homeId) {
-        // Verify existence
         const exists = await getNote(homeId);
         if (exists) {
             setCentralNoteId(homeId);
         } else {
-            // Home note was deleted
+            // Home note deleted? Fallback
             const all = await getAllNotes();
             if (all.length > 0) {
-                 setCentralNoteId(all[0].id);
+                setCentralNoteId(all[0].id);
             } else {
-                 const newId = await seedDatabase();
-                 if (newId) setCentralNoteId(newId);
+                const newId = await seedDatabase();
+                if (newId) setCentralNoteId(newId);
             }
         }
     } else {
+        // No home set, open settings
         setSettingsOpen(true);
     }
   }, []);
 
   const performDelete = useCallback(async (note: Note) => {
         await deleteNote(note.id);
-        
-        // If we deleted the central note, we must navigate away
         if (note.id === centralNoteId) {
-            goHome(); // This will fallback to first available if home is gone
+            goHome(); 
         } else {
-            // We deleted a peripheral note, just refresh topology
             if (centralNoteId) loadTopology(centralNoteId);
         }
-        refreshFavorites(); // In case we deleted a favorite
+        refreshFavorites();
         updateTotalCount();
   }, [centralNoteId, goHome]);
 
@@ -442,15 +433,13 @@ function App() {
       }
       refreshFavorites();
       updateTotalCount();
-      setSelectedNoteIds(new Set()); // Clear selection
+      setSelectedNoteIds(new Set()); 
   }, [centralNoteId, goHome]);
 
   const handleDeleteAction = useCallback(async (e?: React.MouseEvent | React.KeyboardEvent) => {
     if (e) e.preventDefault();
     
-    // Access selection via ref to ensure freshness
-    const selectedIds = Array.from(selectedNoteIdsRef.current) as string[];
-    
+    const selectedIds = Array.from(selectedNoteIdsRef.current);
     if (selectedIds.length > 0) {
         if(confirm(`Are you sure you want to delete ${selectedIds.length} selected notes?`)) {
             await performBulkDelete(selectedIds);
@@ -461,13 +450,9 @@ function App() {
             await performDelete(note);
         }
     }
-  }, [getFocusedNote, performBulkDelete, performDelete]);
+  }, [selectedNoteIds, getFocusedNote, performBulkDelete, performDelete]);
 
-
-  // --- Relationship Management Logic ---
-
-  const getSelectedOrFocusedNotes = (): string[] => {
-      // Access ref for freshness
+  const getSelectedOrFocusedNotes = () => {
       if (selectedNoteIdsRef.current.size > 0) {
           return Array.from(selectedNoteIdsRef.current);
       }
@@ -481,69 +466,63 @@ function App() {
       const targetIds = getSelectedOrFocusedNotes();
       if (targetIds.length === 0) return;
 
-      // Filter out Active Note and Content Preview to prevent self-linking errors
+      // Filter out self
       const validTargets = targetIds.filter(id => id !== centralNoteId);
       if (validTargets.length === 0) return;
 
-      // Helper to clean links
       const cleanRelationships = async (centerId: string, targetId: string) => {
         const center = await getNote(centerId);
         const target = await getNote(targetId);
         if (!center || !target) return;
 
-        // Remove if Child
         if (center.linksTo.includes(targetId)) {
-            await updateNote(centerId, { linksTo: center.linksTo.filter(id => id !== targetId) as string[] });
+            await updateNote(centerId, { linksTo: center.linksTo.filter(id => id !== targetId) });
         }
-        // Remove if Parent
         if (target.linksTo.includes(centerId)) {
-            await updateNote(targetId, { linksTo: target.linksTo.filter(id => id !== centerId) as string[] });
+            await updateNote(targetId, { linksTo: target.linksTo.filter(id => id !== centerId) });
         }
-        // Remove if Related
         if (center.relatedTo.includes(targetId)) {
-            await updateNote(centerId, { relatedTo: center.relatedTo.filter(id => id !== targetId) as string[] });
+            await updateNote(centerId, { relatedTo: center.relatedTo.filter(id => id !== targetId) });
         }
         if (target.relatedTo.includes(centerId)) {
-            await updateNote(targetId, { relatedTo: target.relatedTo.filter(id => id !== targetId) as string[] });
+            await updateNote(targetId, { relatedTo: target.relatedTo.filter(id => id !== targetId) });
         }
       };
 
       for (const id of validTargets) {
+          // 1. Unlink existing
           await cleanRelationships(centralNoteId, id);
 
+          // 2. Link new (if not just unlink)
           if (type === 'up') {
-            // Target becomes Parent of Center
+            // Target becomes Parent of Center (Center links TO Target? No, Uppers link TO Center)
+            // Wait, "Parent" means Target links to Center.
             const target = await getNote(id);
             if (target) {
                 await updateNote(id, { linksTo: [...target.linksTo, centralNoteId] });
             }
           } else if (type === 'down') {
-            // Target becomes Child of Center
+            // Target becomes Child of Center (Center links TO Target)
             const center = await getNote(centralNoteId);
             if (center) {
                 await updateNote(centralNoteId, { linksTo: [...center.linksTo, id] });
             }
           } else if (type === 'left') {
-            // Bi-directional Related
+            // Lateral
             const center = await getNote(centralNoteId);
-            if (center) {
-                await updateNote(centralNoteId, { relatedTo: [...center.relatedTo, id] });
-            }
+            if (center) await updateNote(centralNoteId, { relatedTo: [...center.relatedTo, id] });
             
             const target = await getNote(id);
-            if (target) {
-                await updateNote(id, { relatedTo: [...target.relatedTo, centralNoteId] });
-            }
+            if (target) await updateNote(id, { relatedTo: [...target.relatedTo, centralNoteId] });
           }
       }
 
       loadTopology(centralNoteId);
-      // Clear selection after move/unlink
       setSelectedNoteIds(new Set());
   };
 
   const handleToggleSelection = (noteId: string) => {
-      if (noteId === centralNoteId) return; // Cannot select active note
+      if (noteId === centralNoteId) return; 
       setSelectedNoteIds(prev => {
           const next = new Set(prev);
           if (next.has(noteId)) {
@@ -558,73 +537,50 @@ function App() {
   const handleLinkerSelect = async (targetId: string | null, newTitle?: string) => {
     if (!centralNoteId) return;
 
-    // Helper: Remove any existing relationship between center and target to enforce exclusivity
     const cleanRelationships = async (centerId: string, targetId: string) => {
         const center = await getNote(centerId);
         const target = await getNote(targetId);
         if (!center || !target) return;
-
-        // 1. Remove if Child (remove target from center.linksTo)
         if (center.linksTo.includes(targetId)) {
-            await updateNote(centerId, { linksTo: center.linksTo.filter(id => id !== targetId) as string[] });
+            await updateNote(centerId, { linksTo: center.linksTo.filter(id => id !== targetId) });
         }
-        
-        // 2. Remove if Parent (remove center from target.linksTo)
         if (target.linksTo.includes(centerId)) {
-            await updateNote(targetId, { linksTo: target.linksTo.filter(id => id !== centerId) as string[] });
+            await updateNote(targetId, { linksTo: target.linksTo.filter(id => id !== centerId) });
         }
-
-        // 3. Remove if Related (remove from both relatedTo)
         if (center.relatedTo.includes(targetId)) {
-            await updateNote(centerId, { relatedTo: center.relatedTo.filter(id => id !== targetId) as string[] });
+            await updateNote(centerId, { relatedTo: center.relatedTo.filter(id => id !== targetId) });
         }
         if (target.relatedTo.includes(centerId)) {
-            await updateNote(targetId, { relatedTo: target.relatedTo.filter(id => id !== targetId) as string[] });
+            await updateNote(targetId, { relatedTo: target.relatedTo.filter(id => id !== targetId) });
         }
     };
     
-    // Helper function to perform the linking logic
     const linkToTarget = async (id: string) => {
-        // First ensure no conflicting relationship exists
         await cleanRelationships(centralNoteId, id);
-
         if (linkerType === 'up') {
-            // Target becomes Parent of Center
             const target = await getNote(id);
-            if (target) {
-                await updateNote(id, { linksTo: [...target.linksTo, centralNoteId] });
-            }
+            if (target) await updateNote(id, { linksTo: [...target.linksTo, centralNoteId] });
         } else if (linkerType === 'down') {
-            // Target becomes Child of Center
             const center = await getNote(centralNoteId);
-            if (center) {
-                await updateNote(centralNoteId, { linksTo: [...center.linksTo, id] });
-            }
+            if (center) await updateNote(centralNoteId, { linksTo: [...center.linksTo, id] });
         } else if (linkerType === 'left') {
-            // Bi-directional linking for Lateral (Related) nodes
             const center = await getNote(centralNoteId);
-            if (center) {
-                await updateNote(centralNoteId, { relatedTo: [...center.relatedTo, id] });
-            }
-    
+            if (center) await updateNote(centralNoteId, { relatedTo: [...center.relatedTo, id] });
             const target = await getNote(id);
-            if (target) {
-                await updateNote(id, { relatedTo: [...target.relatedTo, centralNoteId] });
-            }
+            if (target) await updateNote(id, { relatedTo: [...target.relatedTo, centralNoteId] });
         }
     };
 
     if (!targetId && newTitle) {
-        // Check for Bulk Import
         if (newTitle.includes(';')) {
-             const titles = newTitle.split(';').map(t => t.trim()).filter(t => t.length > 0);
-             for (const title of titles) {
-                 const newNote = await createNote(title);
-                 await linkToTarget(newNote.id);
-             }
+            const titles = newTitle.split(';').map(t => t.trim()).filter(t => t.length > 0);
+            for (const title of titles) {
+                const newNote = await createNote(title);
+                await linkToTarget(newNote.id);
+            }
         } else {
-             const newNote = await createNote(newTitle);
-             await linkToTarget(newNote.id);
+            const newNote = await createNote(newTitle);
+            await linkToTarget(newNote.id);
         }
     } else if (targetId) {
         await linkToTarget(targetId);
@@ -646,11 +602,8 @@ function App() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    
     const now = new Date();
-    // Format: YYYY-MM-DD_HH-mm
     const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
-    
     a.download = `JaRoetPKM_${getCurrentVaultName()}_${dateStr}.json`;
     a.click();
     URL.revokeObjectURL(url);
@@ -658,7 +611,6 @@ function App() {
   };
 
   const importData = () => {
-    // Append input to DOM to ensure browser keeps file handle reference alive
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'application/json';
@@ -670,43 +622,33 @@ function App() {
       if (file) {
         const reader = new FileReader();
         reader.onload = async (event) => {
-             try {
+            try {
                 const text = event.target?.result as string;
                 if (!text) throw new Error("Empty file");
-                
                 const notes = JSON.parse(text);
                 await importNotes(notes);
-                
-                // Cleanup
                 document.body.removeChild(input);
-                
-                // Wait for IndexedDB writes to settle
+                // Reload to refresh DB connection and state
                 setTimeout(() => {
                     window.location.reload();
                 }, 500);
             } catch (err) {
                 console.error(err);
-                alert('Error importing file. It might be invalid JSON or too large.');
+                alert('Error importing file.');
                 if (document.body.contains(input)) document.body.removeChild(input);
             }
         };
-        reader.onerror = () => {
-            alert("Failed to read file");
-            if (document.body.contains(input)) document.body.removeChild(input);
-        };
         reader.readAsText(file);
       } else {
-         if (document.body.contains(input)) document.body.removeChild(input);
+        if (document.body.contains(input)) document.body.removeChild(input);
       }
     };
     input.click();
     setShowMainMenu(false);
   };
 
-  // --- Keyboard Handling ---
-
-  const handleGlobalKeyDown = useCallback(async (e: React.KeyboardEvent | KeyboardEvent) => {
-    // Close dropdowns on ESC
+  const handleGlobalKeyDown = useCallback(async (e: KeyboardEvent) => {
+    // ESC handling
     if (e.key === 'Escape') {
         let closed = false;
         if (showFavDropdown) {
@@ -717,14 +659,12 @@ function App() {
             setShowMainMenu(false);
             closed = true;
         }
-        // Clear selection via ref
         if (selectedNoteIdsRef.current.size > 0) {
             setSelectedNoteIds(new Set());
             closed = true;
         }
-
         if (closed) {
-            // Only reset focus if we weren't just clearing selection
+            // Also focus center if we just closed something overlaying
             if (selectedNoteIdsRef.current.size === 0) {
                 setFocusedSection('center');
                 setFocusedIndex(0);
@@ -743,14 +683,14 @@ function App() {
       return;
     }
     
-    // Journal Mode
+    // Journal Mode (Ctrl+J)
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') {
         e.preventDefault();
         handleJournal();
         return;
     }
 
-    // Toggle Selection (x) with Auto-Advance
+    // Toggle Selection (x)
     if (e.key === 'x') {
         e.preventDefault();
         const note = getFocusedNote();
@@ -765,23 +705,18 @@ function App() {
         return;
     }
 
-    // Completely Delete Note
     if (e.ctrlKey && e.key === 'Backspace') {
         e.preventDefault();
-        // Delegate to unified delete handler
         await handleDeleteAction();
         return;
     }
 
-    // Unlink Note (Standard Backspace)
     if (e.key === 'Backspace') {
       e.preventDefault();
-      // Handle Multi-select Unlink via ref
       if (selectedNoteIdsRef.current.size > 0) {
           await changeRelationship('unlink');
           return;
       }
-      // Single note unlink
       const note = getFocusedNote();
       if (note && centralNoteId && focusedSection !== 'center' && focusedSection !== 'right' && focusedSection !== 'favs' && focusedSection !== 'content') {
         await changeRelationship('unlink');
@@ -791,7 +726,6 @@ function App() {
     }
 
     if (e.ctrlKey) {
-        // Multi-select Move or Linker via ref
         if (e.key === 'ArrowUp') {
             e.preventDefault();
             if (selectedNoteIdsRef.current.size > 0) {
@@ -830,8 +764,8 @@ function App() {
         return;
     }
 
-    // Shift+Enter: Open Editor in View Mode
-    if (e.shiftKey && e.key === 'Enter' && !e.ctrlKey && !e.metaKey) {
+    // Shift+Enter: Open Editor (View/Edit) - Updated to fix conflict
+    if (e.shiftKey && e.key === 'Enter') {
         e.preventDefault();
         handleOpenEditor('view');
         return;
@@ -844,14 +778,14 @@ function App() {
         return;
     }
 
-    // NEW LOGIC: Enter = Focus Center (Recenter Focus)
+    // Enter: Focus Center (Recenter Focus)
     if (e.key === 'Enter') { 
         e.preventDefault();
         setFocusedSection('center');
         return;
     }
 
-    // NEW LOGIC: Space = Open Note (Navigate Into)
+    // Space: Navigate Into (Open Note)
     if (e.key === ' ') {
         e.preventDefault();
         const note = getFocusedNote();
@@ -861,48 +795,45 @@ function App() {
         return;
     }
 
-    // --- Directional Navigation ---
-    
-    // Improved DOM-based detection of where the next column starts
     const getItemsPerColumn = (sectionId: string) => {
         const container = document.getElementById(sectionId);
         if (!container) return 1;
-
-        // Get all note card children
-        const cards = Array.from(container.children).filter(c => c.id.startsWith('note-'));
         
+        // We look for direct children that are note cards
+        const cards = Array.from(container.children).filter(c => c.id.startsWith('note-')) as HTMLElement[];
         if (cards.length < 2) return 1;
 
-        // The first card should be at the far left (start of column 1)
-        const firstLeft = (cards[0] as HTMLElement).offsetLeft;
+        // Check offsetLeft of first vs second. If different, we are row-major? 
+        // No, this is column-major flex-wrap.
+        // In column flex-wrap, items stack vertically. 
+        // When vertical space fills, it moves to the next column.
+        // We detect a column break when offsetLeft changes.
         
-        // Iterate until we find a card that has a significantly different 'left' position
+        const firstLeft = cards[0].offsetLeft;
+        
+        // Find the index of the first item that has a different left offset
         for (let i = 1; i < cards.length; i++) {
-            const currentLeft = (cards[i] as HTMLElement).offsetLeft;
-            // Using a tolerance (e.g., 20px) to account for minor sub-pixel rendering or borders
+            const currentLeft = cards[i].offsetLeft;
+            // Allow small pixel tolerance
             if (currentLeft > firstLeft + 20) {
-                return i; // The index `i` is the first item of the second column, so `i` is the count
+                return i; // This is the count in the first column
             }
         }
-
-        // If no wrap detected, everything is in one column
-        return cards.length;
+        
+        return cards.length; // Single column
     };
 
     if (e.key === 'ArrowUp') {
         e.preventDefault();
-        
-        // --- Range Selection (Shift+Up) ---
-        if (e.shiftKey && (['up', 'down', 'left', 'right', 'favs'] as Section[]).includes(focusedSection)) {
+        if (e.shiftKey && ['up', 'down', 'left', 'right', 'favs'].includes(focusedSection)) {
+             // Range Selection Logic
              const notes = getSortedNotes(focusedSection);
              if (notes.length === 0) return;
-
              // Ensure current is selected if starting fresh
              if (selectedNoteIds.size === 0) {
                  const current = notes[focusedIndex];
                  if (current) handleToggleSelection(current.id);
              }
-
              if (focusedIndex > 0) {
                  const newIndex = focusedIndex - 1;
                  setFocusedIndex(newIndex);
@@ -919,8 +850,6 @@ function App() {
         }
 
         if (focusedSection === 'content') {
-             // Scroll up in content or move to section above?
-             // Since "Keyboard centric", let's move to Right section (Siblings)
              setFocusedSection('right');
              setFocusedIndex(Math.min(sectionIndices.right, topology.righters.length - 1));
              return;
@@ -951,18 +880,13 @@ function App() {
         }
     } else if (e.key === 'ArrowDown') {
         e.preventDefault();
-
-        // --- Range Selection (Shift+Down) ---
-        if (e.shiftKey && (['up', 'down', 'left', 'right', 'favs'] as Section[]).includes(focusedSection)) {
+        if (e.shiftKey && ['up', 'down', 'left', 'right', 'favs'].includes(focusedSection)) {
              const notes = getSortedNotes(focusedSection);
              if (notes.length === 0) return;
-
-             // Ensure current is selected if starting fresh
              if (selectedNoteIds.size === 0) {
                  const current = notes[focusedIndex];
                  if (current) handleToggleSelection(current.id);
              }
-
              if (focusedIndex < notes.length - 1) {
                  const newIndex = focusedIndex + 1;
                  setFocusedIndex(newIndex);
@@ -977,12 +901,7 @@ function App() {
              }
              return;
         }
-        
-        if (focusedSection === 'content') {
-             // Already at bottom
-             return;
-        }
-
+        if (focusedSection === 'content') return;
         if (focusedSection === 'center') {
              if (topology.downers.length > 0) {
                 setFocusedSection('down');
@@ -1022,13 +941,23 @@ function App() {
     } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
         
+        // Handle Intra-Section Column Navigation (Left)
+        if (['up', 'down', 'left', 'right', 'favs'].includes(focusedSection)) {
+             const containerId = `container-${focusedSection}`;
+             const itemsPerCol = getItemsPerColumn(containerId);
+             const newIndex = focusedIndex - itemsPerCol;
+             if (newIndex >= 0) {
+                 setFocusedIndex(newIndex);
+                 return; // Stay in section, just moved column left
+             }
+             // If < 0, fall through to section switch logic
+        }
+
         if (focusedSection === 'content') {
-            // From Content to Children (Down)
              setFocusedSection('down');
              setFocusedIndex(Math.min(sectionIndices.down, topology.downers.length - 1));
              return;
         }
-
         if (focusedSection === 'center') {
             if (topology.lefters.length > 0) {
                 setFocusedSection('left');
@@ -1040,12 +969,9 @@ function App() {
                  setFocusedIndex(target);
             }
         } else if (focusedSection === 'right') {
-             // Siblings -> Parents? Or Center?
-             // Visually Siblings are Right of Parents/Center.
-             setFocusedSection('up'); // Approximate alignment
+             setFocusedSection('up');
              setFocusedIndex(Math.min(sectionIndices.up, topology.uppers.length - 1));
         } else if (focusedSection === 'down') {
-             // Children -> Favorites?
              if (showFavorites && favorites.length > 0) {
                  setFocusedSection('favs');
                  setFocusedIndex(Math.min(sectionIndices.favs, favorites.length - 1));
@@ -1056,38 +982,38 @@ function App() {
         } else if (focusedSection === 'up') {
             setFocusedSection('left');
             setFocusedIndex(Math.min(sectionIndices.left, topology.lefters.length - 1));
-        } else if (focusedSection === 'left' || focusedSection === 'favs') {
-            // Already at left, handle wrapping in columns if needed
-            const containerId = focusedSection === 'left' ? 'container-left' : 'container-favs';
-            const itemsPerCol = getItemsPerColumn(containerId);
-            
-            const newIndex = focusedIndex - itemsPerCol;
-            if (newIndex >= 0) {
-                setFocusedIndex(newIndex);
-            } else {
-                setFocusedIndex(0); 
-            }
         }
     } else if (e.key === 'ArrowRight') {
         e.preventDefault();
-        
-        if (focusedSection === 'content') {
-             return;
+
+        // Handle Intra-Section Column Navigation (Right)
+        if (['up', 'down', 'left', 'right', 'favs'].includes(focusedSection)) {
+             const containerId = `container-${focusedSection}`;
+             const itemsPerCol = getItemsPerColumn(containerId);
+             const notes = getSortedNotes(focusedSection);
+             const newIndex = focusedIndex + itemsPerCol;
+             
+             if (newIndex < notes.length) {
+                 setFocusedIndex(newIndex);
+                 return; // Stay in section, just moved column right
+             }
+             // If >= length, fall through to section switch logic
         }
 
+        if (focusedSection === 'content') return;
         if (focusedSection === 'center') {
             if (topology.righters.length > 0) {
                 setFocusedSection('right');
                 const target = Math.min(sectionIndices.right, topology.righters.length - 1);
                 setFocusedIndex(target);
-            } else if (showContent) {
+            } else {
                 setFocusedSection('content');
             }
         } else if (focusedSection === 'left') {
-            setFocusedSection('up'); // Approximate
+            setFocusedSection('up'); 
             setFocusedIndex(Math.min(sectionIndices.up, topology.uppers.length - 1));
         } else if (focusedSection === 'favs') {
-            setFocusedSection('down'); // Approximate
+            setFocusedSection('down'); 
             setFocusedIndex(Math.min(sectionIndices.down, topology.downers.length - 1));
         } else if (focusedSection === 'up') {
              setFocusedSection('right');
@@ -1096,44 +1022,21 @@ function App() {
              if (showContent) {
                 setFocusedSection('content');
              } else if (topology.righters.length > 0) {
-                // If content is hidden, down -> right
                 setFocusedSection('right');
                 setFocusedIndex(Math.min(sectionIndices.right, topology.righters.length - 1));
              }
-        } else if (focusedSection === 'right') {
-            // Column wrap
-            const containerId = 'container-right';
-            const itemsPerCol = getItemsPerColumn(containerId);
-            const arr = getSortedNotes(focusedSection);
-            const newIndex = focusedIndex + itemsPerCol;
-            
-            if (newIndex < arr.length) {
-                setFocusedIndex(newIndex);
-            } else {
-                setFocusedIndex(arr.length - 1);
-            }
-        }
+        } 
     }
 
   }, [focusedSection, focusedIndex, topology, favorites, centralNoteId, renameModalOpen, isSearchActive, editorOpen, linkerOpen, settingsOpen, fontSize, sectionIndices, getFocusedNote, getSortedNotes, showFavDropdown, showMainMenu, selectedNoteIds, showFavorites, showContent, handleDeleteAction]);
 
   useEffect(() => {
-    window.addEventListener('keydown', handleGlobalKeyDown as any);
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown as any);
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, [handleGlobalKeyDown]);
 
-  // --- Render Helpers ---
-
-  const renderSection = (
-    notes: Note[], 
-    section: Section, 
-    containerClasses: string, 
-    itemClasses: string, 
-    containerId?: string
-  ) => {
-    // Sort notes alphabetically by title
+  const renderSection = (notes: Note[], section: Section, containerClasses: string, itemClasses: string, containerId: string) => {
     const sortedNotes = [...notes].sort((a, b) => a.title.localeCompare(b.title));
-
     return (
         <div id={containerId} className={containerClasses}>
             {sortedNotes.map((note, idx) => (
@@ -1158,23 +1061,17 @@ function App() {
     );
   };
   
-  // Updated style: Removed fixed text-[10px] and uppercase class to allow dynamic sizing and Title Case
+  // UI Calculations
   const labelStyle = "absolute -top-[5px] left-6 px-3 py-0.5 font-bold tracking-wider bg-[var(--theme-section)] text-[color-mix(in_srgb,var(--theme-accent)_50%,transparent)] select-none z-20 pointer-events-none rounded-full border border-black/10 dark:border-white/10";
-
-  // Calculate UI font size (4 points smaller than note font size, minimum 14px)
   const uiFontSize = Math.max(14, fontSize - 4);
-
   const activeNote = getFocusedNote();
   const activeNoteHasContent = activeNote?.content && activeNote.content.trim().length > 0;
-  
-  // Determine if linking tools should be active
   const hasSelection = selectedNoteIds.size > 0;
   const linkToolActive = hasSelection || (focusedSection !== 'center' && focusedSection !== 'content' && focusedSection !== 'right' && focusedSection !== 'favs');
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground font-sans">
       
-      {/* --- Main Content --- */}
       <div className="flex-1 flex flex-col h-full min-w-0">
         
         {/* Top Bar - Compacted */}
@@ -1622,7 +1519,7 @@ function App() {
         {/* --- Footer / Status Bar --- */}
         <div style={{ fontSize: `${uiFontSize}px` }} className="h-8 flex-shrink-0 bg-[var(--theme-bars)] flex items-center justify-between px-4 text-foreground z-50 transition-colors duration-300">
             <div className="flex-shrink-0 opacity-90">
-                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.2.14
+                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.2.15
             </div>
             <div className="opacity-60 truncate ml-4 text-right">
                 Arrows: Nav | Space: Open | Enter: Center Focus | Shift+Enter: Edit | Ctrl+Arrows: Link | F2: Rename | Bksp: Unlink

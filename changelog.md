@@ -2,6 +2,19 @@
 
 All notable changes to the JaRoet PKM project will be documented in this file.
 
+## [0.2.15] - 2024-05-23
+
+### Added
+- **Column Navigation:** Added support for column-to-column keyboard navigation within list sections (Children, Parents, Siblings, Related). 
+  - Using `Left` and `Right` arrow keys inside a multi-column list will now jump horizontally between columns before moving to the adjacent section.
+
+## [0.2.14] - 2024-05-23
+
+### Fixed
+- **Markdown Editor Lists:** Fixed the display of lists inside the Markdown Editor preview. They are now more compact and styled correctly.
+- **Task Checkboxes:** Fixed an issue where clicking task checkboxes `[ ]` in the Editor View Mode would not toggle them. They are now fully interactive.
+- **Editor Spacing:** Added a small margin to checkboxes for better readability.
+
 ## [0.2.13] - 2024-05-23
 
 ### Fixed
