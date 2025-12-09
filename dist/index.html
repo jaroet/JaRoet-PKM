@@ -168,47 +168,9 @@
             return `<input type="checkbox" ${checked ? 'checked="" ' : ''} class="task-list-item-checkbox" style="cursor: pointer; margin-right: 0.6em; vertical-align: middle;">`;
         };
 
-        // --- 1. Types ---
+        // --- 1. Types & Interfaces (Shimmed for JS execution) ---
+        // Interfaces are stripped by Babel, so we just declare nothing here.
         
-        interface Note {
-          id: string;
-          title: string;
-          content: string;
-          linksTo: string[];   // Downers (Children)
-          relatedTo: string[]; // Lefters (Lateral)
-          isFavorite: boolean;
-          createdAt: number;
-          modifiedAt: number;
-        }
-
-        type Section = 'center' | 'up' | 'down' | 'left' | 'right' | 'favs' | 'content';
-
-        interface Topology {
-          center: Note | null;
-          uppers: Note[];
-          downers: Note[];
-          lefters: Note[];
-          righters: Note[];
-        }
-
-        interface SearchResult {
-          id: string;
-          title: string;
-        }
-
-        type Theme = 'light' | 'dark';
-
-        interface Point {
-          x: number;
-          y: number;
-        }
-
-        interface Connection {
-          from: Point;
-          to: Point;
-          type: 'hierarchical' | 'lateral';
-        }
-
         // --- 2. Database Services ---
         
         // Dexie is available globally as 'Dexie'
@@ -241,16 +203,13 @@
         // --- Database Class ---
 
         class PKMDatabase extends Dexie {
-          // Type shim for TS in Babel
-          notes;
-          meta;
-
           constructor() {
             super(getCurrentVaultName());
             this.version(1).stores({
               notes: 'id, title, *linksTo, *relatedTo', 
               meta: 'key',
             });
+            // Dexie automatically adds 'notes' and 'meta' properties
           }
         }
 
@@ -463,18 +422,6 @@
         const setSectionVisibility = async (key, value) => {
             await db.meta.put({ key: `ui_${key}`, value });
         };
-
-        interface ThemeConfig {
-            background: string;
-            section: string;
-            accent: string;
-            bars: string;
-        }
-
-        interface AppTheme {
-            light: ThemeConfig;
-            dark: ThemeConfig;
-        }
 
         const DEFAULT_THEME = {
             light: {
@@ -2826,6 +2773,22 @@
     }
 
   }, [focusedSection, focusedIndex, topology, favorites, centralNoteId, renameModalOpen, isSearchActive, editorOpen, linkerOpen, settingsOpen, fontSize, sectionIndices, getFocusedNote, getSortedNotes, showFavDropdown, showMainMenu, selectedNoteIds, showFavorites, showContent, handleDeleteAction, importModalOpen]);
+
+  // Robust Event Listener Attachment
+  // We use a ref to store the latest callback so we don't have to add/remove the listener constantly
+  const handleKeyDownRef = useRef(handleGlobalKeyDown);
+  
+  // Update ref whenever callback changes
+  useEffect(() => {
+    handleKeyDownRef.current = handleGlobalKeyDown;
+  }, [handleGlobalKeyDown]);
+
+  // Attach listener ONLY ONCE on mount
+  useEffect(() => {
+    const handler = (e) => handleKeyDownRef.current(e);
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
           const renderSection = (notes, section, containerClasses, itemClasses, containerId) => {
             const sortedNotes = [...notes].sort((a, b) => a.title.localeCompare(b.title));
