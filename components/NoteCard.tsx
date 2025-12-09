@@ -10,9 +10,10 @@ interface NoteCardProps {
   onClick: (e: React.MouseEvent) => void;
   className?: string;
   id?: string;
+  subtitle?: string | null;
 }
 
-const NoteCard: React.FC<NoteCardProps> = ({ note, isFocused, isSelected, isCenter, fontSize, onClick, className, id }) => {
+const NoteCard: React.FC<NoteCardProps> = ({ note, isFocused, isSelected, isCenter, fontSize, onClick, className, id, subtitle }) => {
     
     // Central Note Style
     if (isCenter) {
@@ -40,6 +41,14 @@ const NoteCard: React.FC<NoteCardProps> = ({ note, isFocused, isSelected, isCent
           >
             {note.title}
           </div>
+          {subtitle && (
+            <div 
+                style={{ fontSize: `${fontSize * 0.9}px` }}
+                className="mt-2 font-medium opacity-60 uppercase tracking-widest"
+            >
+                {subtitle}
+            </div>
+          )}
         </div>
       );
     }

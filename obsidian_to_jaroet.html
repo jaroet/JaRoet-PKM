@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Obsidian to JaRoet Converter</title>
+    <style>
+        :root {
+            --bg: #f8fafc;
+            --text: #0f172a;
+            --card: #ffffff;
+            --primary: #3b82f6;
+            --border: #e2e8f0;
+            --success: #22c55e;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #0f172a;
+                --text: #f8fafc;
+                --card: #1e293b;
+                --primary: #60a5fa;
+                --border: #334155;
+            }
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            background-color: var(--card);
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 600px;
+            border: 1px solid var(--border);
+        }
+        h1 { margin-top: 0; color: var(--primary); }
+        .input-group { margin-bottom: 1.5rem; text-align: left; }
+        label { display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.9rem; }
+        input[type="text"] {
+            width: 100%;
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            border: 1px solid var(--border);
+            background: var(--bg);
+            color: var(--text);
+            box-sizing: border-box; /* Important for padding */
+        }
+        .file-upload {
+            border: 2px dashed var(--border);
+            padding: 2rem;
+            text-align: center;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        .file-upload:hover { border-color: var(--primary); }
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 1rem;
+        }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+        #log {
+            margin-top: 1.5rem;
+            background: #000;
+            color: #0f0;
+            font-family: monospace;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            height: 200px;
+            overflow-y: auto;
+            text-align: left;
+            font-size: 0.8rem;
+            white-space: pre-wrap;
+        }
+        .progress-bar {
+            height: 8px;
+            background: var(--border);
+            border-radius: 4px;
+            margin-top: 1.5rem;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: var(--success);
+            width: 0%;
+            transition: width 0.2s;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Obsidian to JaRoet Converter</h1>
+        <p style="opacity: 0.8; margin-bottom: 2rem;">
+            Select your Obsidian vault folder. This tool runs locally in your browser.
+        </p>
+
+        <div class="input-group">
+            <label for="journalFolder">Journal Folder Name (Optional)</label>
+            <input type="text" id="journalFolder" placeholder="e.g. Daily Notes" value="Daily Notes">
+            <small style="opacity: 0.6; display: block; margin-top: 5px;">
+                Files in this folder (and its subfolders) with YYYY-MM-DD names will be imported as Journal entries.
+            </small>
+        </div>
+
+        <div class="file-upload" onclick="document.getElementById('dirInput').click()">
+            <span id="fileLabel">Click to select Vault Folder</span>
+            <input type="file" id="dirInput" webkitdirectory multiple style="display: none;">
+        </div>
+
+        <button id="convertBtn" disabled>Start Conversion</button>
+
+        <div class="progress-bar">
+            <div id="progress" class="progress-fill"></div>
+        </div>
+
+        <div id="log">Waiting for folder selection...</div>
+    </div>
+
+    <script>
+        const dirInput = document.getElementById('dirInput');
+        const convertBtn = document.getElementById('convertBtn');
+        const journalInput = document.getElementById('journalFolder');
+        const logBox = document.getElementById('log');
+        const progressFill = document.getElementById('progress');
+        const fileLabel = document.getElementById('fileLabel');
+
+        let selectedFiles = [];
+
+        function getJaRoetDateInfo(filename) {
+            // Regex to strictly match YYYY-MM-DD
+            const match = filename.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (!match) return null;
+            
+            const year = parseInt(match[1], 10);
+            const monthIndex = parseInt(match[2], 10) - 1;
+            const day = parseInt(match[3], 10);
+
+            const date = new Date(year, monthIndex, day);
+            
+            // Validate that the date is correct (handles invalid dates like 2023-02-30)
+            if (date.getFullYear() !== year || date.getMonth() !== monthIndex || date.getDate() !== day) {
+                return null;
+            }
+
+            const mm = String(monthIndex + 1).padStart(2, '0');
+            const dd = String(day).padStart(2, '0');
+
+            return {
+                // Target Format: 2023-10-21
+                title: `${year}-${mm}-${dd}`,
+                // Target Format: 2023-10
+                monthTitle: `${year}-${mm}`,
+                // Target Format: 2023
+                yearTitle: `${year}`,
+                timestamp: date.getTime()
+            };
+        }
+
+        // Helper: Logging
+        function log(msg) {
+            logBox.textContent += `> ${msg}\n`;
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        dirInput.addEventListener('change', (e) => {
+            selectedFiles = Array.from(e.target.files).filter(f => f.name.endsWith('.md'));
+            if (selectedFiles.length > 0) {
+                fileLabel.textContent = `Selected ${selectedFiles.length} Markdown files`;
+                convertBtn.disabled = false;
+                log(`Found ${selectedFiles.length} .md files.`);
+            } else {
+                fileLabel.textContent = "No .md files found in folder";
+                convertBtn.disabled = true;
+            }
+        });
+
+        convertBtn.addEventListener('click', async () => {
+            convertBtn.disabled = true;
+            log("Starting conversion...");
+            
+            const JOURNAL_FOLDER = journalInput.value.trim();
+            const notes = [];
+            const pathIdMap = new Map(); // path string -> uuid
+            
+            // 1. Create Roots
+            const now = Date.now();
+            
+            // Obsidian Import Root
+            const rootId = crypto.randomUUID();
+            const rootNote = {
+                id: rootId,
+                title: 'Obsidian Import',
+                content: '# Obsidian Import\n\nImported on ' + new Date().toLocaleDateString(),
+                linksTo: [],
+                relatedTo: [],
+                isFavorite: false,
+                createdAt: now,
+                modifiedAt: now
+            };
+            notes.push(rootNote);
+            pathIdMap.set('ROOT', rootId);
+
+            // Journal Handling Helpers
+            let journalHubId = null;
+            const journalCache = {
+                years: {},  // YearTitle -> ID
+                months: {}  // MonthTitle -> ID
+            };
+
+            const getJournalHub = () => {
+                if (!journalHubId) {
+                    journalHubId = crypto.randomUUID();
+                    notes.push({
+                        id: journalHubId,
+                        title: 'Journal Hub',
+                        content: '# Journal Hub\n\nThe root of your chronological journey.',
+                        linksTo: [],
+                        relatedTo: [],
+                        isFavorite: true,
+                        createdAt: now,
+                        modifiedAt: now
+                    });
+                    // Note: Journal Hub is NOT linked to Obsidian Import to keep it clean as a separate tree/root.
+                }
+                return journalHubId;
+            };
+
+            const getJournalParentIds = (dateInfo) => {
+                const hubId = getJournalHub();
+                
+                // 1. Year Note: "2023"
+                let yearId = journalCache.years[dateInfo.yearTitle];
+                if (!yearId) {
+                    yearId = crypto.randomUUID();
+                    notes.push({
+                        id: yearId,
+                        title: dateInfo.yearTitle,
+                        content: `# ${dateInfo.yearTitle}`,
+                        linksTo: [],
+                        relatedTo: [],
+                        isFavorite: false,
+                        createdAt: now,
+                        modifiedAt: now
+                    });
+                    journalCache.years[dateInfo.yearTitle] = yearId;
+                    
+                    // Link Hub -> Year
+                    const hub = notes.find(n => n.id === hubId);
+                    hub.linksTo.push(yearId);
+                }
+
+                // 2. Month Note: "2023-10"
+                let monthId = journalCache.months[dateInfo.monthTitle];
+                if (!monthId) {
+                    monthId = crypto.randomUUID();
+                    notes.push({
+                        id: monthId,
+                        title: dateInfo.monthTitle,
+                        content: `# ${dateInfo.monthTitle}`,
+                        linksTo: [],
+                        relatedTo: [],
+                        isFavorite: false,
+                        createdAt: now,
+                        modifiedAt: now
+                    });
+                    journalCache.months[dateInfo.monthTitle] = monthId;
+
+                    // Link Year -> Month
+                    const year = notes.find(n => n.id === yearId);
+                    year.linksTo.push(monthId);
+                }
+
+                return monthId; // Return Month ID so Day can link to it
+            };
+
+            // 2. Process Files
+            let processed = 0;
+
+            for (const file of selectedFiles) {
+                // webkitRelativePath example: "VaultName/Folder/Subfolder/Note.md"
+                const fullPath = file.webkitRelativePath;
+                const pathParts = fullPath.split('/');
+                
+                // Remove the first part (The vault root folder name) to avoid double nesting
+                // e.g., "MyVault/Log/Day.md" -> ["Log", "Day.md"]
+                const internalPath = pathParts.slice(1);
+                
+                // Read content
+                const text = await file.text();
+                const filename = internalPath[internalPath.length - 1];
+                const title = filename.replace('.md', '');
+                
+                // Check if Journal
+                // We check if the root folder of this file matches the Journal Folder Name
+                // This captures files in "Log", "Log/2023", "Log/2023/01", etc.
+                const isJournalFolder = JOURNAL_FOLDER && internalPath.length > 1 && internalPath[0].toLowerCase() === JOURNAL_FOLDER.toLowerCase();
+                
+                let noteId = crypto.randomUUID();
+                let finalTitle = title;
+                
+                // --- LOGIC SPLIT ---
+
+                if (isJournalFolder) {
+                    // Try to parse YYYY-MM-DD
+                    const dateInfo = getJaRoetDateInfo(title);
+                    if (dateInfo) {
+                        // It is a valid journal entry
+                        // Set Title: "2023-10-21"
+                        finalTitle = dateInfo.title;
+                        const monthId = getJournalParentIds(dateInfo);
+                        
+                        // Create Day Note linked to Month
+                        const note = {
+                            id: noteId,
+                            title: finalTitle,
+                            content: text,
+                            linksTo: [],
+                            relatedTo: [],
+                            isFavorite: false,
+                            createdAt: file.lastModified,
+                            modifiedAt: file.lastModified
+                        };
+                        notes.push(note);
+                        
+                        // Link Month -> Day
+                        const month = notes.find(n => n.id === monthId);
+                        month.linksTo.push(noteId);
+                        
+                        pathIdMap.set(fullPath, noteId); // Map original path to this ID
+                        
+                        processed++;
+                        if (processed % 50 === 0) {
+                            progressFill.style.width = `${(processed / selectedFiles.length) * 100}%`;
+                            log(`Processed ${processed} files (Journal)...`);
+                            await new Promise(r => setTimeout(r, 0)); // Yield UI
+                        }
+                        
+                        // CRITICAL: Continue here ensures we do NOT fall through to folder creation logic.
+                        // This file will have NO folder links.
+                        continue; 
+                    }
+                    // If not valid date, fall through to standard handling
+                }
+
+                // --- STANDARD FOLDER HANDLING ---
+
+                // Build directory hierarchy for this file
+                let currentParentId = rootId;
+
+                // internalPath has ["Folder", "Sub", "File.md"]
+                // We iterate up to length-1 (Folders only)
+                for (let i = 0; i < internalPath.length - 1; i++) {
+                    const folderName = internalPath[i];
+                    const folderKey = internalPath.slice(0, i + 1).join('/'); // "Folder" or "Folder/Sub"
+                    
+                    if (pathIdMap.has(folderKey)) {
+                        currentParentId = pathIdMap.get(folderKey);
+                    } else {
+                        // Create Folder Note
+                        const folderId = crypto.randomUUID();
+                        const folderNote = {
+                            id: folderId,
+                            title: folderName,
+                            content: `# ${folderName}\n\nFolder imported from Obsidian.`,
+                            linksTo: [],
+                            relatedTo: [],
+                            isFavorite: false,
+                            createdAt: now,
+                            modifiedAt: now
+                        };
+                        notes.push(folderNote);
+                        pathIdMap.set(folderKey, folderId);
+
+                        // Link Parent -> New Folder
+                        const parent = notes.find(n => n.id === currentParentId);
+                        if (parent) parent.linksTo.push(folderId);
+
+                        currentParentId = folderId;
+                    }
+                }
+
+                // Create the actual Note
+                const note = {
+                    id: noteId,
+                    title: finalTitle,
+                    content: text,
+                    linksTo: [],
+                    relatedTo: [],
+                    isFavorite: false,
+                    createdAt: file.lastModified,
+                    modifiedAt: file.lastModified
+                };
+                notes.push(note);
+                pathIdMap.set(fullPath, noteId);
+
+                // Link Folder -> Note
+                const parent = notes.find(n => n.id === currentParentId);
+                if (parent) parent.linksTo.push(noteId);
+
+                processed++;
+                if (processed % 50 === 0) {
+                    progressFill.style.width = `${(processed / selectedFiles.length) * 100}%`;
+                    log(`Processed ${processed} files...`);
+                    await new Promise(r => setTimeout(r, 0)); // Yield UI
+                }
+            }
+
+            progressFill.style.width = '100%';
+            log("Conversion complete!");
+            log(`Total Notes: ${notes.length}`);
+
+            // Download Trigger
+            const blob = new Blob([JSON.stringify(notes, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `JaRoet_Import_${new Date().toISOString().slice(0,10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            convertBtn.disabled = false;
+        });
+
+    </script>
+</body>
+</html>

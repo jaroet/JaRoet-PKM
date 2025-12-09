@@ -96,17 +96,28 @@
 
     <script type="text/babel" data-presets="react,typescript">
         // --- React Hooks & Global Shims ---
-        const { useState, useEffect, useRef, useCallback } = React;
+        const { useState, useEffect, useRef, useCallback, useLayoutEffect } = React;
         
         // --- Configure Marked for External Links (Global) ---
         const renderer = new marked.Renderer();
         const originalLink = renderer.link;
         renderer.link = function(href, title, text) {
-            const isExternal = href && (href.startsWith('http') || href.startsWith('//'));
+            let linkHref = href || '';
+            let linkTitle = title || '';
+            let linkText = text || '';
+
+            // Handle object arg if marked version passes object
+            if (typeof href === 'object') {
+                linkHref = href.href;
+                linkTitle = href.title;
+                linkText = href.text;
+            }
+
+            const isExternal = linkHref && (linkHref.startsWith('http') || linkHref.startsWith('//'));
             const target = isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
-            const titleAttr = title ? ` title="${title}"` : '';
+            const titleAttr = linkTitle ? ` title="${linkTitle}"` : '';
             
-            let output = `<a href="${href}"${titleAttr}${target}>${text}`;
+            let output = `<a href="${linkHref}"${titleAttr}${target}>${linkText}`;
             
             if (isExternal) {
                  output += '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block ml-0.5 opacity-70 mb-0.5 align-baseline"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>';
@@ -116,9 +127,39 @@
         };
         // Global renderer has disabled checkboxes (for main view)
         renderer.checkbox = function(checked) {
-            return `<input type="checkbox" ${checked ? 'checked="" ' : ''} class="task-list-item-checkbox" disabled>`;
+            return `<input type="checkbox" ${checked ? 'checked="" ' : ''} class="task-list-item-checkbox" disabled style="margin-right: 0.6em; vertical-align: middle;">`;
         };
-        marked.use({ renderer });
+        
+        // WikiLink Extension
+        const wikiLinkExtension = {
+            name: 'wikiLink',
+            level: 'inline',
+            start(src) { return src.match(/\[\[/)?.index; },
+            tokenizer(src) {
+                const rule = /^\[\[([^\]]+)\]\]/;
+                const match = rule.exec(src);
+                if (match) {
+                    const inner = match[1];
+                    const parts = inner.split('|');
+                    const title = parts[0].trim();
+                    const alias = parts.length > 1 ? parts.slice(1).join('|').trim() : title;
+                    return {
+                        type: 'wikiLink',
+                        raw: match[0],
+                        title: title,
+                        alias: alias
+                    };
+                }
+            },
+            renderer(token) {
+                return `<a class="internal-link text-primary hover:underline cursor-pointer" data-title="${token.title}">${token.alias}</a>`;
+            }
+        };
+
+        marked.use({ 
+            renderer, 
+            extensions: [wikiLinkExtension] 
+        });
 
         // --- Editor Specific Renderer ---
         const editorRenderer = new marked.Renderer();
@@ -264,7 +305,7 @@
             const n1 = {
               id: crypto.randomUUID(),
               title: 'Welcome to JaRoet PKM',
-              content: '# Welcome\n\nThis is your Central Note. Use arrow keys to navigate.',
+              content: '# Welcome\n\nThis is your Central Note. Use arrow keys to navigate.\n\nYou can link to other notes using [[WikiLinks]].',
               linksTo: [],
               relatedTo: [],
               isFavorite: false,
@@ -285,6 +326,10 @@
 
         const getNote = async (id) => {
           return await db.notes.get(id);
+        };
+        
+        const findNoteByTitle = async (title) => {
+            return await db.notes.where('title').equalsIgnoreCase(title).first();
         };
 
         const createNote = async (title) => {
@@ -474,53 +519,114 @@
           return await db.notes.toArray();
         };
 
-        const importNotes = async (notes) => {
-          await db.notes.clear();
-          const CHUNK_SIZE = 50; 
-          for (let i = 0; i < notes.length; i += CHUNK_SIZE) {
-            const chunk = notes.slice(i, i + CHUNK_SIZE);
-            await db.notes.bulkAdd(chunk);
-            await new Promise(resolve => setTimeout(resolve, 10));
-          }
-          const favorites = notes.filter(n => n.isFavorite).map(n => n.id);
-          await db.meta.put({ key: 'favoritesList', value: favorites });
-          if (notes.length > 0) {
-              await db.meta.put({ key: 'currentCentralNoteId', value: notes[0].id });
-              await db.meta.put({ key: 'homeNoteId', value: notes[0].id });
-          }
+        const importNotes = async (notes, mode) => {
+            if (mode === 'overwrite') {
+                await db.notes.clear();
+                const CHUNK_SIZE = 50; 
+                for (let i = 0; i < notes.length; i += CHUNK_SIZE) {
+                    const chunk = notes.slice(i, i + CHUNK_SIZE);
+                    await db.notes.bulkAdd(chunk);
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                }
+                const favorites = notes.filter(n => n.isFavorite).map(n => n.id);
+                await db.meta.put({ key: 'favoritesList', value: favorites });
+                if (notes.length > 0) {
+                    await db.meta.put({ key: 'currentCentralNoteId', value: notes[0].id });
+                    await db.meta.put({ key: 'homeNoteId', value: notes[0].id });
+                }
+            } else {
+                // MERGE MODE
+                const existingNotes = await db.notes.toArray();
+                const existingTitles = new Set(existingNotes.map(n => n.title.toLowerCase()));
+
+                const idMap = new Map();
+                notes.forEach(note => {
+                    idMap.set(note.id, crypto.randomUUID());
+                });
+
+                const notesToAdd = [];
+                const renamedNoteIds = [];
+                
+                for (const note of notes) {
+                    let newTitle = note.title;
+                    let isRenamed = false;
+                    let counter = 1;
+
+                    while (existingTitles.has(newTitle.toLowerCase())) {
+                        newTitle = `${note.title} (${counter})`;
+                        counter++;
+                        isRenamed = true;
+                    }
+
+                    existingTitles.add(newTitle.toLowerCase());
+                    const newId = idMap.get(note.id);
+                    
+                    if (isRenamed) {
+                        renamedNoteIds.push(newId);
+                    }
+
+                    const newLinksTo = note.linksTo.map(oldId => idMap.get(oldId)).filter(Boolean);
+                    const newRelatedTo = note.relatedTo.map(oldId => idMap.get(oldId)).filter(Boolean);
+
+                    notesToAdd.push({
+                        ...note,
+                        id: newId,
+                        title: newTitle,
+                        linksTo: newLinksTo,
+                        relatedTo: newRelatedTo,
+                    });
+                }
+
+                if (renamedNoteIds.length > 0) {
+                    const now = new Date();
+                    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
+                    const auditTitle = `import_${dateStr}`;
+                    const auditId = crypto.randomUUID();
+                    
+                    const auditNote = {
+                        id: auditId,
+                        title: auditTitle,
+                        content: `# Import Audit\n\nNotes imported on ${dateStr} that required renaming due to name collisions.`,
+                        linksTo: renamedNoteIds,
+                        relatedTo: [],
+                        isFavorite: false,
+                        createdAt: now.getTime(),
+                        modifiedAt: now.getTime()
+                    };
+                    
+                    notesToAdd.push(auditNote);
+                }
+
+                const CHUNK_SIZE = 50; 
+                for (let i = 0; i < notesToAdd.length; i += CHUNK_SIZE) {
+                    const chunk = notesToAdd.slice(i, i + CHUNK_SIZE);
+                    await db.notes.bulkAdd(chunk);
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                }
+            }
         };
 
         // --- 2b. Journal Service ---
-        const journalDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        const journalMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-
-        const formatJournalDate = (d) => {
+        
+        const formatDate = (d) => {
             const yyyy = d.getFullYear();
             const mm = String(d.getMonth() + 1).padStart(2, '0');
             const dd = String(d.getDate()).padStart(2, '0');
-            const dayName = journalDays[d.getDay()];
-            const monthName = journalMonths[d.getMonth()];
             
             return {
-                full: `${yyyy}-${mm}-${dd} (${dayName})`,
-                month: `${yyyy}-${mm} (${monthName})`,
-                year: `Journal ${yyyy}`,
+                full: `${yyyy}-${mm}-${dd}`,
+                month: `${yyyy}-${mm}`,
+                year: `${yyyy}`,
+                raw: d
             };
-        };
-
-        const findNoteByExactTitle = async (title) => {
-            const results = await searchNotes(title);
-            const match = results.find(r => r.title.toLowerCase() === title.toLowerCase());
-            if (match) return await getNote(match.id);
-            return undefined;
         };
 
         const goToToday = async () => {
             const now = new Date();
-            const dateInfo = formatJournalDate(now);
+            const dateInfo = formatDate(now);
             
             // 1. Ensure Hub
-            let hub = await findNoteByExactTitle('Journal Hub');
+            let hub = await findNoteByTitle('Journal Hub');
             if (!hub) {
                 hub = await createNote('Journal Hub');
                 await updateNote(hub.id, { 
@@ -530,7 +636,7 @@
             }
 
             // 2. Ensure Year
-            let yearNote = await findNoteByExactTitle(dateInfo.year);
+            let yearNote = await findNoteByTitle(dateInfo.year);
             if (!yearNote) {
                 yearNote = await createNote(dateInfo.year);
                 const freshHub = await getNote(hub.id);
@@ -540,7 +646,7 @@
             }
 
             // 3. Ensure Month
-            let monthNote = await findNoteByExactTitle(dateInfo.month);
+            let monthNote = await findNoteByTitle(dateInfo.month);
             if (!monthNote) {
                 monthNote = await createNote(dateInfo.month);
                 const freshYear = await getNote(yearNote.id);
@@ -550,7 +656,7 @@
             }
 
             // 4. Ensure Today
-            let dayNote = await findNoteByExactTitle(dateInfo.full);
+            let dayNote = await findNoteByTitle(dateInfo.full);
             if (!dayNote) {
                 dayNote = await createNote(dateInfo.full);
                 // Empty content per request
@@ -563,8 +669,8 @@
                 // 5. Link Yesterday
                 const yesterdayDate = new Date(now);
                 yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-                const yInfo = formatJournalDate(yesterdayDate);
-                const yesterdayNote = await findNoteByExactTitle(yInfo.full);
+                const yInfo = formatDate(yesterdayDate);
+                const yesterdayNote = await findNoteByTitle(yInfo.full);
                 
                 if (yesterdayNote) {
                     const freshDay = await getNote(dayNote.id);
@@ -583,8 +689,8 @@
                 for (let i = 1; i <= 5; i++) {
                     const pastDate = new Date(now);
                     pastDate.setFullYear(pastDate.getFullYear() - i);
-                    const pInfo = formatJournalDate(pastDate);
-                    const pastNote = await findNoteByExactTitle(pInfo.full);
+                    const pInfo = formatDate(pastDate);
+                    const pastNote = await findNoteByTitle(pInfo.full);
                     if (pastNote) {
                         const freshDay = await getNote(dayNote.id);
                         const freshPast = await getNote(pastNote.id);
@@ -607,7 +713,7 @@
         // --- 3. Components ---
 
         // -- NoteCard --
-        const NoteCard = ({ note, isFocused, isSelected, isCenter, fontSize, onClick, className, id }) => {
+        const NoteCard = ({ note, isFocused, isSelected, isCenter, fontSize, onClick, className, id, subtitle }) => {
             if (isCenter) {
               return (
                 <div
@@ -633,6 +739,14 @@
                   >
                     {note.title}
                   </div>
+                  {subtitle && (
+                    <div 
+                        style={{ fontSize: `${fontSize * 0.9}px` }}
+                        className="mt-2 font-medium opacity-60 uppercase tracking-widest"
+                    >
+                        {subtitle}
+                    </div>
+                  )}
                 </div>
               );
             }
@@ -810,11 +924,114 @@
           );
         };
 
+        // -- ImportModal --
+        const ImportModal = ({ isOpen, onClose, importData, onConfirm }) => {
+            if (!isOpen) return null;
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                <div className="bg-background p-6 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-800 w-full max-w-md flex flex-col gap-4">
+                    
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <h3 className="text-xl font-bold">Import Notes</h3>
+                            <p className="text-sm text-gray-500 mt-1">
+                                Ready to import <b>{importData.length}</b> notes.
+                            </p>
+                        </div>
+                        <button onClick={onClose} className="text-gray-500 hover:text-foreground">✕</button>
+                    </div>
+
+                    <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                        <h4 className="font-bold text-blue-700 dark:text-blue-300 mb-1">Merge into Current Vault</h4>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                            Adds imported notes to your existing database. 
+                        </p>
+                        <ul className="text-xs text-gray-500 dark:text-gray-400 list-disc list-inside mb-3 space-y-1">
+                            <li>Existing notes are preserved.</li>
+                            <li>Imported notes get unique IDs.</li>
+                            <li>Duplicate titles are renamed (e.g. "Note (1)").</li>
+                            <li>Renamed notes are linked to a new <span className="font-mono">import_YYYY-MM...</span> parent.</li>
+                        </ul>
+                        <button 
+                            onClick={() => onConfirm('merge')}
+                            className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium transition-colors"
+                        >
+                            Merge Notes
+                        </button>
+                    </div>
+
+                    <div className="p-4 bg-red-50 dark:bg-red-900/10 rounded-lg border border-red-100 dark:border-red-900/30">
+                        <h4 className="font-bold text-red-700 dark:text-red-400 mb-1">Overwrite Current Vault</h4>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                            <b>Warning:</b> This will delete all existing notes and replace them with the imported data.
+                        </p>
+                        <button 
+                            onClick={() => onConfirm('overwrite')}
+                            className="w-full py-2 bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50 rounded font-medium transition-colors"
+                        >
+                            Overwrite (Clear & Import)
+                        </button>
+                    </div>
+
+                    <div className="text-center">
+                        <button 
+                            onClick={onClose} 
+                            className="text-sm text-gray-500 hover:text-foreground underline"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+                </div>
+            );
+        };
+
         // -- MarkdownEditor --
-        const MarkdownEditor = ({ note, isOpen, initialMode, onClose, onSave }) => {
+        const getCaretCoordinates = (element, position) => {
+            const div = document.createElement('div');
+            const style = window.getComputedStyle(element);
+            
+            Array.from(style).forEach((prop) => {
+                div.style.setProperty(prop, style.getPropertyValue(prop));
+            });
+
+            div.style.position = 'absolute';
+            div.style.visibility = 'hidden';
+            div.style.whiteSpace = 'pre-wrap';
+            div.style.top = '0';
+            div.style.left = '0';
+            
+            div.textContent = element.value.substring(0, position);
+            
+            const span = document.createElement('span');
+            span.textContent = element.value.substring(position) || '.';
+            div.appendChild(span);
+
+            document.body.appendChild(div);
+            
+            const coordinates = {
+                top: span.offsetTop + parseInt(style.borderTopWidth),
+                left: span.offsetLeft + parseInt(style.borderLeftWidth),
+                height: parseInt(style.lineHeight)
+            };
+
+            document.body.removeChild(div);
+            return coordinates;
+        };
+
+        const MarkdownEditor = ({ note, isOpen, initialMode, onClose, onSave, onInternalLinkClick }) => {
           const [content, setContent] = useState('');
           const [parsedHtml, setParsedHtml] = useState('');
           const [isPreview, setIsPreview] = useState(initialMode === 'view');
+          
+          const [showSuggestions, setShowSuggestions] = useState(false);
+          const [suggestionQuery, setSuggestionQuery] = useState('');
+          const [suggestions, setSuggestions] = useState([]);
+          const [suggestionIndex, setSuggestionIndex] = useState(0);
+          const [caretPos, setCaretPos] = useState({ top: 0, left: 0 });
+          const [triggerIndex, setTriggerIndex] = useState(-1);
+
           const textareaRef = useRef(null);
           const containerRef = useRef(null);
           const previewRef = useRef(null);
@@ -824,6 +1041,7 @@
             if (note && isOpen) {
               setContent(note.content || '');
               setIsPreview(initialMode === 'view');
+              setShowSuggestions(false);
               
               setTimeout(() => {
                   if (initialMode === 'view') {
@@ -862,9 +1080,20 @@
             return () => clearTimeout(timeout);
           }, [content]);
 
+          useEffect(() => {
+            if (showSuggestions) {
+                const fetch = async () => {
+                     const results = await searchNotes(suggestionQuery);
+                     setSuggestions(results);
+                     setSuggestionIndex(0);
+                };
+                const t = setTimeout(fetch, 150);
+                return () => clearTimeout(t);
+            }
+          }, [suggestionQuery, showSuggestions]);
+
           const toggleTask = (index) => {
             if (!note) return;
-            // Regex to find tasks: matches "- [ ]", "* [x]", etc.
             const regex = /^(\s*[-*+]\s+\[)([ xX])(\])/gm;
             let currentIndex = 0;
             
@@ -894,6 +1123,14 @@
                            toggleTask(index);
                        }
                    }
+                   return;
+              }
+              if (target.classList.contains('internal-link')) {
+                  e.preventDefault();
+                  const title = target.getAttribute('data-title');
+                  if (title) {
+                      onInternalLinkClick(title);
+                  }
               }
           };
 
@@ -916,8 +1153,77 @@
               setTimeout(() => previewRef.current?.focus(), 50);
           };
 
+          const insertSuggestion = (title) => {
+              const before = content.slice(0, triggerIndex);
+              const after = content.slice(textareaRef.current?.selectionEnd || content.length);
+              
+              const newText = `${before}[[${title}]]${after}`;
+              setContent(newText);
+              setShowSuggestions(false);
+              
+              setTimeout(() => {
+                  if (textareaRef.current) {
+                      textareaRef.current.focus();
+                      const newCursorPos = triggerIndex + 2 + title.length + 2;
+                      textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
+                  }
+              }, 50);
+          };
+
+          const handleChange = (e) => {
+              const val = e.target.value;
+              setContent(val);
+
+              const cursorPos = e.target.selectionEnd;
+              const lastOpenBracket = val.lastIndexOf('[[', cursorPos);
+              
+              if (lastOpenBracket !== -1) {
+                  const textBetween = val.slice(lastOpenBracket + 2, cursorPos);
+                  if (textBetween.includes(']]') || textBetween.includes('\n')) {
+                      setShowSuggestions(false);
+                  } else {
+                      setTriggerIndex(lastOpenBracket);
+                      setSuggestionQuery(textBetween);
+                      setShowSuggestions(true);
+                      
+                      const coords = getCaretCoordinates(e.target, lastOpenBracket);
+                      const top = coords.top - e.target.scrollTop;
+                      const left = coords.left - e.target.scrollLeft;
+                      setCaretPos({ top, left });
+                  }
+              } else {
+                  setShowSuggestions(false);
+              }
+          };
+
           const handleKeyDown = (e) => {
-            e.stopPropagation(); // Stop global listeners
+            e.stopPropagation(); 
+
+            if (showSuggestions && suggestions.length > 0) {
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setSuggestionIndex(prev => (prev + 1) % suggestions.length);
+                    return;
+                }
+                if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setSuggestionIndex(prev => (prev - 1 + suggestions.length) % suggestions.length);
+                    return;
+                }
+                if (e.key === 'Enter' || e.key === 'Tab') {
+                    e.preventDefault();
+                    const selected = suggestions[suggestionIndex];
+                    if (selected) {
+                        insertSuggestion(selected.title);
+                    }
+                    return;
+                }
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    setShowSuggestions(false);
+                    return;
+                }
+            }
 
             if (e.key === 'Escape') {
               e.preventDefault();
@@ -952,30 +1258,11 @@
 
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-              <style>{`
-                .editor-preview ul, .editor-preview ol {
-                    margin-top: 0.25em !important;
-                    margin-bottom: 0.25em !important;
-                }
-                .editor-preview li {
-                    margin-top: 0 !important;
-                    margin-bottom: 0 !important;
-                }
-                .editor-preview li > p {
-                    margin-top: 0 !important;
-                    margin-bottom: 0 !important;
-                }
-                .editor-preview li.task-list-item {
-                    list-style-type: none;
-                    padding-left: 0;
-                }
-              `}</style>
-
               <div 
                 ref={containerRef}
                 tabIndex={-1} 
                 onKeyDown={handleKeyDown}
-                className="w-full max-w-[90vw] h-[90vh] bg-[var(--theme-bg)] rounded-lg shadow-2xl flex flex-col border border-gray-200 dark:border-gray-800 outline-none"
+                className="w-full max-w-[90vw] h-[90vh] bg-[var(--theme-bg)] rounded-lg shadow-2xl flex flex-col border border-gray-200 dark:border-gray-800 outline-none relative"
               >
                 <div className="flex justify-between items-center p-4 border-b dark:border-gray-700 bg-background/50 rounded-t-lg">
                   <h2 className="text-xl font-bold truncate pr-4">{note.title}</h2>
@@ -1015,24 +1302,53 @@
                             tabIndex={0}
                             onClick={handlePreviewClick}
                             style={{ fontSize: '15px' }}
-                            className="editor-preview w-full h-full p-6 overflow-auto prose dark:prose-invert max-w-none custom-scrollbar select-text outline-none"
+                            className="editor-preview w-full h-full p-6 overflow-auto prose dark:prose-invert max-w-none custom-scrollbar select-text outline-none compact-markdown"
                             dangerouslySetInnerHTML={{ __html: parsedHtml }}
                         />
                     ) : (
-                        <textarea
-                            ref={textareaRef}
-                            value={content}
-                            onChange={(e) => setContent(e.target.value)}
-                            style={{ fontSize: '15px' }}
-                            className="w-full h-full p-6 bg-transparent resize-none outline-none font-mono custom-scrollbar"
-                            placeholder="Type markdown here..."
-                        />
+                        <div className="relative w-full h-full">
+                            <textarea
+                                ref={textareaRef}
+                                value={content}
+                                onChange={handleChange}
+                                style={{ fontSize: '15px' }}
+                                className="w-full h-full p-6 bg-transparent resize-none outline-none font-mono custom-scrollbar"
+                                placeholder="Type markdown here... Use [[ to link."
+                            />
+                            {showSuggestions && (
+                                <div 
+                                    className="absolute z-50 w-64 bg-card border border-gray-200 dark:border-gray-700 shadow-xl rounded-md max-h-60 overflow-y-auto"
+                                    style={{ 
+                                        top: caretPos.top + 30, 
+                                        left: caretPos.left + 24 
+                                    }}
+                                >
+                                    {suggestions.length === 0 ? (
+                                        <div className="p-2 text-xs text-gray-500 italic">No matching notes</div>
+                                    ) : (
+                                        suggestions.map((s, idx) => (
+                                            <div
+                                                key={s.id}
+                                                onClick={() => insertSuggestion(s.title)}
+                                                className={`px-3 py-2 text-sm cursor-pointer ${
+                                                    idx === suggestionIndex 
+                                                        ? 'bg-primary text-primary-foreground' 
+                                                        : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+                                                }`}
+                                            >
+                                                {s.title}
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     )}
                 </div>
                 <div className="p-2 text-xs text-gray-500 border-t dark:border-gray-700 text-center bg-background/50 rounded-b-lg">
                     {isPreview 
                         ? 'View Mode • Ctrl+Enter: Edit • Shift+Enter: Close • Esc: Close' 
-                        : 'Edit Mode • Shift+Enter: Save & View • Ctrl+Enter: Cancel & Close • Esc: Cancel & Close'
+                        : 'Edit Mode • [[ for links • Shift+Enter: Save & View • Ctrl+Enter: Cancel & Close • Esc: Cancel'
                     }
                 </div>
               </div>
@@ -1513,6 +1829,25 @@
 
         // --- 4. Mount ---
 
+        const compactMarkdownStyles = `
+          .compact-markdown ul, .compact-markdown ol {
+              margin-top: 0.25em !important;
+              margin-bottom: 0.25em !important;
+          }
+          .compact-markdown li {
+              margin-top: 0 !important;
+              margin-bottom: 0 !important;
+          }
+          .compact-markdown li > p {
+              margin-top: 0 !important;
+              margin-bottom: 0 !important;
+          }
+          .compact-markdown li.task-list-item {
+              list-style-type: none;
+              padding-left: 0;
+          }
+        `;
+
         const rootElement = document.getElementById('root');
         const root = ReactDOM.createRoot(rootElement);
         
@@ -1537,6 +1872,9 @@
           const [focusedSection, setFocusedSection] = useState('center');
           const [focusedIndex, setFocusedIndex] = useState(0);
           const [sectionIndices, setSectionIndices] = useState({ up: 0, down: 0, left: 0, right: 0, favs: 0 });
+          
+          // Scroll persistence per section
+          const scrollPositionsRef = useRef({});
 
           const [selectedNoteIds, setSelectedNoteIds] = useState(new Set());
           const selectedNoteIdsRef = useRef(new Set());
@@ -1559,6 +1897,9 @@
           const [noteToRename, setNoteToRename] = useState(null);
 
           const [settingsOpen, setSettingsOpen] = useState(false);
+
+          const [importModalOpen, setImportModalOpen] = useState(false);
+          const [pendingImportData, setPendingImportData] = useState([]);
           
           const [previewHtml, setPreviewHtml] = useState('');
           
@@ -1650,6 +1991,8 @@
               setFocusedIndex(0);
               setSectionIndices({ up: 0, down: 0, left: 0, right: 0, favs: 0 });
               setSelectedNoteIds(new Set());
+              // Reset scroll on navigation
+              scrollPositionsRef.current = {};
               updateTotalCount();
             }
           }, [centralNoteId]);
@@ -1819,6 +2162,33 @@
             }
           };
 
+          const handleInternalLinkClick = async (title) => {
+              const targetNote = await findNoteByTitle(title);
+              if (targetNote) {
+                  setCentralNoteId(targetNote.id);
+                  if (editorOpen) {
+                      if (targetNote.content && targetNote.content.trim().length > 0) {
+                          // refresh content
+                      } else {
+                          setEditorOpen(false);
+                      }
+                  }
+              } else {
+                  alert(`Note "${title}" not found.`);
+              }
+          };
+
+          const handleCanvasContentClick = (e) => {
+              const target = e.target;
+              if (target.classList.contains('internal-link')) {
+                  e.preventDefault();
+                  const title = target.getAttribute('data-title');
+                  if (title) {
+                      handleInternalLinkClick(title);
+                  }
+              }
+          };
+
           const goHome = useCallback(async () => {
             const homeId = await getHomeNoteId();
             if (homeId) {
@@ -1959,7 +2329,10 @@
           };
 
           const handleLinkerSelect = async (targetId, newTitle) => {
-            if (!centralNoteId) return;
+            const focusedNote = getFocusedNote();
+            const anchorId = focusedNote ? focusedNote.id : centralNoteId;
+            
+            if (!anchorId) return;
 
             const cleanRelationships = async (centerId, targetId) => {
                 const center = await getNote(centerId);
@@ -1980,18 +2353,18 @@
             };
             
             const linkToTarget = async (id) => {
-                await cleanRelationships(centralNoteId, id);
+                await cleanRelationships(anchorId, id);
                 if (linkerType === 'up') {
                     const target = await getNote(id);
-                    if (target) await updateNote(id, { linksTo: [...target.linksTo, centralNoteId] });
+                    if (target) await updateNote(id, { linksTo: [...target.linksTo, anchorId] });
                 } else if (linkerType === 'down') {
-                    const center = await getNote(centralNoteId);
-                    if (center) await updateNote(centralNoteId, { linksTo: [...center.linksTo, id] });
+                    const anchor = await getNote(anchorId);
+                    if (anchor) await updateNote(anchorId, { linksTo: [...anchor.linksTo, id] });
                 } else if (linkerType === 'left') {
-                    const center = await getNote(centralNoteId);
-                    if (center) await updateNote(centralNoteId, { relatedTo: [...center.relatedTo, id] });
+                    const anchor = await getNote(anchorId);
+                    if (anchor) await updateNote(anchorId, { relatedTo: [...anchor.relatedTo, id] });
                     const target = await getNote(id);
-                    if (target) await updateNote(id, { relatedTo: [...target.relatedTo, centralNoteId] });
+                    if (target) await updateNote(id, { relatedTo: [...target.relatedTo, anchorId] });
                 }
             };
 
@@ -2010,8 +2383,17 @@
                 await linkToTarget(targetId);
             }
 
-            loadTopology(centralNoteId);
+            if (centralNoteId) loadTopology(centralNoteId);
             updateTotalCount();
+          };
+
+          const handleLinkButtonAction = (type) => {
+              if (selectedNoteIdsRef.current.size > 0) {
+                  changeRelationship(type);
+              } else {
+                  setLinkerType(type);
+                  setLinkerOpen(true);
+              }
           };
 
           const handleSearchSelect = (id) => {
@@ -2050,14 +2432,12 @@
                         const text = event.target?.result;
                         if (!text) throw new Error("Empty file");
                         const notes = JSON.parse(text);
-                        await importNotes(notes);
+                        setPendingImportData(notes);
+                        setImportModalOpen(true);
                         document.body.removeChild(input);
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 500);
                     } catch (err) {
                         console.error(err);
-                        alert('Error importing file.');
+                        alert('Error parsing file.');
                         if (document.body.contains(input)) document.body.removeChild(input);
                     }
                 };
@@ -2068,6 +2448,19 @@
             };
             input.click();
             setShowMainMenu(false);
+          };
+
+          const handleConfirmImport = async (mode) => {
+              setImportModalOpen(false);
+              try {
+                  await importNotes(pendingImportData, mode);
+                  setTimeout(() => {
+                      window.location.reload();
+                  }, 500);
+              } catch (e) {
+                  console.error(e);
+                  alert("Import failed. See console for details.");
+              }
           };
 
           const handleGlobalKeyDown = useCallback(async (e) => {
@@ -2095,7 +2488,7 @@
                 }
             }
 
-            if (renameModalOpen || isSearchActive || editorOpen || linkerOpen || settingsOpen) return;
+            if (renameModalOpen || isSearchActive || editorOpen || linkerOpen || settingsOpen || importModalOpen) return;
 
             if (e.key === '/') {
               e.preventDefault();
@@ -2184,7 +2577,7 @@
                 return;
             }
 
-            // Priority Fix: Check Shift+Enter (Open Editor) BEFORE checking plain Enter (Focus Center)
+            // Shift+Enter
             if (e.shiftKey && e.key === 'Enter') {
                 e.preventDefault();
                 handleOpenEditor('view');
@@ -2198,14 +2591,14 @@
                 return;
             }
 
-            // NEW LOGIC: Enter = Focus Center (Recenter Focus)
+            // Enter = Focus Center
             if (e.key === 'Enter') { 
                 e.preventDefault();
                 setFocusedSection('center');
                 return;
             }
 
-            // NEW LOGIC: Space = Open Note (Navigate Into)
+            // Space = Open Note
             if (e.key === ' ') {
                 e.preventDefault();
                 const note = getFocusedNote();
@@ -2433,17 +2826,28 @@
         } 
     }
 
-  }, [focusedSection, focusedIndex, topology, favorites, centralNoteId, renameModalOpen, isSearchActive, editorOpen, linkerOpen, settingsOpen, fontSize, sectionIndices, getFocusedNote, getSortedNotes, showFavDropdown, showMainMenu, selectedNoteIds, showFavorites, showContent, handleDeleteAction]);
-
-          useEffect(() => {
-            window.addEventListener('keydown', handleGlobalKeyDown);
-            return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-          }, [handleGlobalKeyDown]);
+  }, [focusedSection, focusedIndex, topology, favorites, centralNoteId, renameModalOpen, isSearchActive, editorOpen, linkerOpen, settingsOpen, fontSize, sectionIndices, getFocusedNote, getSortedNotes, showFavDropdown, showMainMenu, selectedNoteIds, showFavorites, showContent, handleDeleteAction, importModalOpen]);
 
           const renderSection = (notes, section, containerClasses, itemClasses, containerId) => {
             const sortedNotes = [...notes].sort((a, b) => a.title.localeCompare(b.title));
+            
+            // Restore scroll
+            useLayoutEffect(() => {
+                const el = document.getElementById(containerId);
+                if (el) {
+                    const savedPos = scrollPositionsRef.current[containerId] || 0;
+                    if (el.scrollTop !== savedPos) {
+                        el.scrollTop = savedPos;
+                    }
+                }
+            }, [sortedNotes.map(n => n.id).join(','), section]);
+
+            const handleScroll = (e) => {
+                scrollPositionsRef.current[containerId] = e.target.scrollTop;
+            };
+
             return (
-                <div id={containerId} className={containerClasses}>
+                <div id={containerId} className={containerClasses} onScroll={handleScroll}>
                     {sortedNotes.map((note, idx) => (
                         <NoteCard
                             key={note.id}
@@ -2471,11 +2875,34 @@
           const activeNote = getFocusedNote();
           const activeNoteHasContent = activeNote?.content && activeNote.content.trim().length > 0;
           const hasSelection = selectedNoteIds.size > 0;
-          const linkToolActive = hasSelection || (focusedSection !== 'center' && focusedSection !== 'content' && focusedSection !== 'right' && focusedSection !== 'favs');
+          const canUnlink = hasSelection || (focusedSection !== 'center' && focusedSection !== 'content' && focusedSection !== 'right' && focusedSection !== 'favs');
+
+          const getDateSubtitle = (title) => {
+              // YYYY-MM-DD
+              if (/^\d{4}-\d{2}-\d{2}$/.test(title)) {
+                  const [y, m, d] = title.split('-').map(Number);
+                  const date = new Date(y, m - 1, d);
+                  if (!isNaN(date.getTime())) {
+                      return date.toLocaleDateString('en-US', { weekday: 'long' });
+                  }
+              }
+              // YYYY-MM
+              if (/^\d{4}-\d{2}$/.test(title)) {
+                  const [y, m] = title.split('-').map(Number);
+                  const date = new Date(y, m - 1, 1);
+                  if (!isNaN(date.getTime())) {
+                      return date.toLocaleDateString('en-US', { month: 'long' });
+                  }
+              }
+              return null;
+          };
+          
+          const centerSubtitle = topology.center ? getDateSubtitle(topology.center.title) : null;
 
           return (
             <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground font-sans">
-              
+              <style>{compactMarkdownStyles}</style>
+
               <div className="flex-1 flex flex-col h-full min-w-0">
                 
                 {/* Top Bar - Compacted */}
@@ -2540,10 +2967,8 @@
                                      >
                                         <span className="w-5 flex justify-center text-primary">
                                             {isDarkMode ? (
-                                                // Sun Icon for "Switch to Light"
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
                                             ) : (
-                                                // Moon Icon for "Switch to Dark"
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
                                             )}
                                         </span>
@@ -2557,25 +2982,25 @@
                                      >
                                         <svg className="text-primary" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
                                         <span>Settings</span>
-                             </button>
+                                     </button>
 
-                             {/* Export */}
-                             <button 
-                                onClick={() => { exportData(); setShowMainMenu(false); }}
-                                className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-3 text-sm text-foreground"
-                             >
-                                <svg className="text-primary" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2 2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                                <span>Export Data</span>
-                             </button>
+                                     {/* Export */}
+                                     <button 
+                                        onClick={() => { exportData(); setShowMainMenu(false); }}
+                                        className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-3 text-sm text-foreground"
+                                     >
+                                        <svg className="text-primary" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2 2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                        <span>Export Data</span>
+                                     </button>
 
-                             {/* Import */}
-                             <button 
-                                onClick={() => { importData(); setShowMainMenu(false); }}
-                                className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-3 text-sm text-foreground"
-                             >
-                                <svg className="text-primary" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                                <span>Import Data</span>
-                             </button>
+                                     {/* Import */}
+                                     <button 
+                                        onClick={() => { importData(); setShowMainMenu(false); }}
+                                        className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-3 text-sm text-foreground"
+                                     >
+                                        <svg className="text-primary" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                                        <span>Import Data</span>
+                                     </button>
                         </div>
                     )}
                 </div>
@@ -2694,36 +3119,33 @@
              <div className="flex items-center gap-1">
                 <button 
                     onClick={() => changeRelationship('unlink')}
-                    disabled={!linkToolActive}
+                    disabled={!canUnlink}
                     title="Unlink Selected/Focused Note (Backspace)" 
-                    className={`p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${!linkToolActive ? 'opacity-30 cursor-not-allowed' : ''}`}
+                    className={`p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${!canUnlink ? 'opacity-30 cursor-not-allowed' : ''}`}
                     style={{ color: 'var(--theme-accent)' }}
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
                 </button>
                 <button 
-                    onClick={() => changeRelationship('left')}
-                    disabled={!linkToolActive}
+                    onClick={() => handleLinkButtonAction('left')}
                     title="Link as Related (Ctrl+Left)" 
-                    className={`p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${!linkToolActive ? 'opacity-30 cursor-not-allowed' : ''}`}
+                    className="p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
                     style={{ color: 'var(--theme-accent)' }}
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
                 </button>
                 <button 
-                    onClick={() => changeRelationship('up')}
-                    disabled={!linkToolActive}
+                    onClick={() => handleLinkButtonAction('up')}
                     title="Link as Parent (Ctrl+Up)" 
-                    className={`p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${!linkToolActive ? 'opacity-30 cursor-not-allowed' : ''}`}
+                    className="p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
                     style={{ color: 'var(--theme-accent)' }}
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
                 </button>
                 <button 
-                    onClick={() => changeRelationship('down')}
-                    disabled={!linkToolActive}
+                    onClick={() => handleLinkButtonAction('down')}
                     title="Link as Child (Ctrl+Down)" 
-                    className={`p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${!linkToolActive ? 'opacity-30 cursor-not-allowed' : ''}`}
+                    className="p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
                     style={{ color: 'var(--theme-accent)' }}
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>
@@ -2758,7 +3180,6 @@
                         } else if (e.key === 'Enter') {
                             e.preventDefault();
                             e.stopPropagation(); // Stop global handlers
-                            // Fix: Directly use index instead of complex logic
                             const selected = searchResults[activeSearchIndex];
                             if (selected) {
                                 handleSearchSelect(selected.id);
@@ -2856,6 +3277,7 @@
                                         isFocused={focusedSection === 'center'}
                                         isCenter={true}
                                         onClick={() => {}}
+                                        subtitle={centerSubtitle}
                                     />
                                     {/* Status Icons (Moved to Section Container) */}
                                     <div className="absolute bottom-4 right-4 flex gap-1 pointer-events-none">
@@ -2905,12 +3327,13 @@
                     {showContent && (
                         <div 
                             ref={contentPreviewRef}
+                            onClick={handleCanvasContentClick}
                             className={`flex-1 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0 outline-none ${focusedSection === 'content' ? 'ring-2 ring-[var(--theme-accent)]' : ''}`}
                             tabIndex={-1}
                         >
                              <div className={labelStyle} style={{ fontSize: `${Math.max(10, fontSize - 10)}px` }}>Content</div>
                              <div 
-                                className="absolute inset-0 p-6 overflow-auto custom-scrollbar prose dark:prose-invert max-w-none rounded-3xl pt-8"
+                                className="absolute inset-0 p-6 overflow-auto custom-scrollbar prose dark:prose-invert max-w-none rounded-3xl pt-8 compact-markdown"
                                 dangerouslySetInnerHTML={{ __html: previewHtml }}
                              />
                         </div>
@@ -2923,7 +3346,7 @@
         {/* --- Footer / Status Bar --- */}
         <div style={{ fontSize: `${uiFontSize}px` }} className="h-8 flex-shrink-0 bg-[var(--theme-bars)] flex items-center justify-between px-4 text-foreground z-50 transition-colors duration-300">
             <div className="flex-shrink-0 opacity-90">
-                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.2.15
+                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.2.20
             </div>
             <div className="opacity-60 truncate ml-4 text-right">
                 Arrows: Nav | Space: Open | Enter: Center Focus | Shift+Enter: Edit | Ctrl+Arrows: Link | F2: Rename | Bksp: Unlink
@@ -2948,6 +3371,7 @@
             updateNote(id, { content });
             loadTopology(centralNoteId);
         }}
+        onInternalLinkClick={handleInternalLinkClick}
       />
       <RenameModal
         isOpen={renameModalOpen}
@@ -2964,15 +3388,21 @@
         onThemeChange={() => setThemeTick(t => t + 1)}
         onSettingsChange={refreshSettings}
       />
+      <ImportModal 
+        isOpen={importModalOpen}
+        importData={pendingImportData}
+        onClose={() => setImportModalOpen(false)}
+        onConfirm={handleConfirmImport}
+      />
     </div>
   );
 }
 
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+        root.render(
+          <React.StrictMode>
+            <App />
+          </React.StrictMode>
+        );
     </script>
 </body>
 </html>

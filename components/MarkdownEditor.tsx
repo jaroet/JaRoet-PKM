@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { marked } from 'marked';
-import { Note } from '../types';
+import { Note, SearchResult } from '../types';
+import { searchNotes } from '../services/db';
 
 interface MarkdownEditorProps {
   note: Note | null;
@@ -8,7 +9,44 @@ interface MarkdownEditorProps {
   initialMode: 'view' | 'edit';
   onClose: () => void;
   onSave: (id: string, content: string) => void;
+  onInternalLinkClick: (title: string) => void;
 }
+
+// --- Helper: Caret Coordinates ---
+// Creates a mirror div to calculate pixel position of the caret
+const getCaretCoordinates = (element: HTMLTextAreaElement, position: number) => {
+    const div = document.createElement('div');
+    const style = window.getComputedStyle(element);
+    
+    Array.from(style).forEach((prop) => {
+        div.style.setProperty(prop, style.getPropertyValue(prop));
+    });
+
+    div.style.position = 'absolute';
+    div.style.visibility = 'hidden';
+    div.style.whiteSpace = 'pre-wrap';
+    div.style.top = '0';
+    div.style.left = '0';
+    
+    // Copy content up to caret
+    div.textContent = element.value.substring(0, position);
+    
+    // Create a span for the caret position
+    const span = document.createElement('span');
+    span.textContent = element.value.substring(position) || '.';
+    div.appendChild(span);
+
+    document.body.appendChild(div);
+    
+    const coordinates = {
+        top: span.offsetTop + parseInt(style.borderTopWidth),
+        left: span.offsetLeft + parseInt(style.borderLeftWidth),
+        height: parseInt(style.lineHeight)
+    };
+
+    document.body.removeChild(div);
+    return coordinates;
+};
 
 // Define a specific renderer for the editor to ensure isolation from global defaults
 const editorRenderer = new marked.Renderer();
@@ -43,14 +81,22 @@ editorRenderer.link = function(hrefOrObj: string | { href: string; title?: strin
 
 // Enabled checkboxes with styling for the editor
 editorRenderer.checkbox = function(checked) {
-    // added margin-right for spacing, vertical-align for alignment
     return `<input type="checkbox" ${checked ? 'checked="" ' : ''} class="task-list-item-checkbox" style="cursor: pointer; margin-right: 0.6em; vertical-align: middle;">`;
 };
 
-const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, initialMode, onClose, onSave }) => {
+const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, initialMode, onClose, onSave, onInternalLinkClick }) => {
   const [content, setContent] = useState('');
   const [parsedHtml, setParsedHtml] = useState('');
   const [isPreview, setIsPreview] = useState(initialMode === 'view');
+  
+  // Autocomplete State
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestionQuery, setSuggestionQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<SearchResult[]>([]);
+  const [suggestionIndex, setSuggestionIndex] = useState(0);
+  const [caretPos, setCaretPos] = useState({ top: 0, left: 0 });
+  const [triggerIndex, setTriggerIndex] = useState(-1);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
@@ -60,6 +106,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, initialMo
     if (note && isOpen) {
       setContent(note.content || '');
       setIsPreview(initialMode === 'view');
+      setShowSuggestions(false);
       
       // Focus appropriate element
       setTimeout(() => {
@@ -99,9 +146,22 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, initialMo
     return () => clearTimeout(timeout);
   }, [content]);
 
+  // Search Notes for Autocomplete
+  useEffect(() => {
+    if (showSuggestions) {
+        const fetch = async () => {
+             // If query is empty, show recent/all, otherwise search
+             const results = await searchNotes(suggestionQuery);
+             setSuggestions(results);
+             setSuggestionIndex(0);
+        };
+        const t = setTimeout(fetch, 150);
+        return () => clearTimeout(t);
+    }
+  }, [suggestionQuery, showSuggestions]);
+
   const toggleTask = (index: number) => {
     if (!note) return;
-    // Regex to find tasks: matches "- [ ]", "* [x]", etc.
     const regex = /^(\s*[-*+]\s+\[)([ xX])(\])/gm;
     let currentIndex = 0;
     
@@ -123,6 +183,8 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, initialMo
 
   const handlePreviewClick = (e: React.MouseEvent) => {
       const target = e.target as HTMLElement;
+      
+      // Handle Checkboxes
       if (target.tagName === 'INPUT' && (target as HTMLInputElement).type === 'checkbox') {
            const checkboxes = previewRef.current?.querySelectorAll('input[type="checkbox"]');
            if (checkboxes) {
@@ -131,6 +193,16 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, initialMo
                    toggleTask(index);
                }
            }
+           return;
+      }
+
+      // Handle Internal Links
+      if (target.classList.contains('internal-link')) {
+          e.preventDefault();
+          const title = target.getAttribute('data-title');
+          if (title) {
+              onInternalLinkClick(title);
+          }
       }
   };
 
@@ -153,10 +225,89 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, initialMo
       setTimeout(() => previewRef.current?.focus(), 50);
   };
 
+  const insertSuggestion = (title: string) => {
+      const before = content.slice(0, triggerIndex);
+      const after = content.slice(textareaRef.current?.selectionEnd || content.length);
+      
+      const newText = `${before}[[${title}]]${after}`;
+      setContent(newText);
+      setShowSuggestions(false);
+      
+      // Reset focus and move cursor
+      setTimeout(() => {
+          if (textareaRef.current) {
+              textareaRef.current.focus();
+              const newCursorPos = triggerIndex + 2 + title.length + 2;
+              textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
+          }
+      }, 50);
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const val = e.target.value;
+      setContent(val);
+
+      // Autocomplete Logic
+      const cursorPos = e.target.selectionEnd;
+      // Look back for [[
+      const lastOpenBracket = val.lastIndexOf('[[', cursorPos);
+      
+      if (lastOpenBracket !== -1) {
+          const textBetween = val.slice(lastOpenBracket + 2, cursorPos);
+          // If we encounter a newline or closing bracket, cancel autocomplete
+          if (textBetween.includes(']]') || textBetween.includes('\n')) {
+              setShowSuggestions(false);
+          } else {
+              // Valid trigger
+              setTriggerIndex(lastOpenBracket);
+              setSuggestionQuery(textBetween);
+              setShowSuggestions(true);
+              
+              // Calculate Position
+              const coords = getCaretCoordinates(e.target, lastOpenBracket);
+              // Adjust for scroll
+              const top = coords.top - e.target.scrollTop;
+              const left = coords.left - e.target.scrollLeft;
+              setCaretPos({ top, left });
+          }
+      } else {
+          setShowSuggestions(false);
+      }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     e.stopPropagation(); // Stop global listeners
 
-    // ESC - Close without saving
+    // Handle Autocomplete Navigation
+    if (showSuggestions && suggestions.length > 0) {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setSuggestionIndex(prev => (prev + 1) % suggestions.length);
+            return;
+        }
+        if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setSuggestionIndex(prev => (prev - 1 + suggestions.length) % suggestions.length);
+            return;
+        }
+        if (e.key === 'Enter' || e.key === 'Tab') {
+            e.preventDefault();
+            const selected = suggestions[suggestionIndex];
+            if (selected) {
+                insertSuggestion(selected.title);
+            }
+            return;
+        }
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            setShowSuggestions(false);
+            return;
+        }
+    }
+
+    // Standard Editor Keys
+    
+    // ESC - Close without saving (if not handling autocomplete)
     if (e.key === 'Escape') {
       e.preventDefault();
       onClose();
@@ -167,10 +318,8 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, initialMo
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         if (isPreview) {
-            // If in View Mode -> Switch to Edit Mode
             switchToEdit();
         } else {
-            // If in Edit Mode -> Close without saving (Cancel/Esc)
             onClose();
         }
         return;
@@ -180,10 +329,8 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, initialMo
     if (e.shiftKey && e.key === 'Enter' && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
         if (isPreview) {
-            // If in View Mode -> Close
             onClose();
         } else {
-             // If in Edit Mode -> Save & Switch to View Mode
              switchToView();
         }
         return;
@@ -194,31 +341,11 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, initialMo
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-       {/* CSS override for compact lists in this specific editor instance */}
-      <style>{`
-        .editor-preview ul, .editor-preview ol {
-            margin-top: 0.25em !important;
-            margin-bottom: 0.25em !important;
-        }
-        .editor-preview li {
-            margin-top: 0 !important;
-            margin-bottom: 0 !important;
-        }
-        .editor-preview li > p {
-            margin-top: 0 !important;
-            margin-bottom: 0 !important;
-        }
-        .editor-preview li.task-list-item {
-            list-style-type: none;
-            padding-left: 0;
-        }
-      `}</style>
-
       <div 
         ref={containerRef}
         tabIndex={-1} 
         onKeyDown={handleKeyDown}
-        className="w-full max-w-[90vw] h-[90vh] bg-[var(--theme-bg)] rounded-lg shadow-2xl flex flex-col border border-gray-200 dark:border-gray-800 outline-none"
+        className="w-full max-w-[90vw] h-[90vh] bg-[var(--theme-bg)] rounded-lg shadow-2xl flex flex-col border border-gray-200 dark:border-gray-800 outline-none relative"
       >
         <div className="flex justify-between items-center p-4 border-b dark:border-gray-700 bg-background/50 rounded-t-lg">
           <h2 className="text-xl font-bold truncate pr-4">{note.title}</h2>
@@ -258,24 +385,55 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({ note, isOpen, initialMo
                     tabIndex={0}
                     onClick={handlePreviewClick}
                     style={{ fontSize: '15px' }}
-                    className="editor-preview w-full h-full p-6 overflow-auto prose dark:prose-invert max-w-none custom-scrollbar select-text outline-none"
+                    className="editor-preview w-full h-full p-6 overflow-auto prose dark:prose-invert max-w-none custom-scrollbar select-text outline-none compact-markdown"
                     dangerouslySetInnerHTML={{ __html: parsedHtml }}
                 />
             ) : (
-                <textarea
-                    ref={textareaRef}
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    style={{ fontSize: '15px' }}
-                    className="w-full h-full p-6 bg-transparent resize-none outline-none font-mono custom-scrollbar"
-                    placeholder="Type markdown here..."
-                />
+                <div className="relative w-full h-full">
+                    <textarea
+                        ref={textareaRef}
+                        value={content}
+                        onChange={handleChange}
+                        style={{ fontSize: '15px' }}
+                        className="w-full h-full p-6 bg-transparent resize-none outline-none font-mono custom-scrollbar"
+                        placeholder="Type markdown here... Use [[ to link."
+                    />
+                    
+                    {/* Autocomplete Popup */}
+                    {showSuggestions && (
+                        <div 
+                            className="absolute z-50 w-64 bg-card border border-gray-200 dark:border-gray-700 shadow-xl rounded-md max-h-60 overflow-y-auto"
+                            style={{ 
+                                top: caretPos.top + 30, // Offset a bit below line
+                                left: caretPos.left + 24 // Offset a bit to right
+                            }}
+                        >
+                            {suggestions.length === 0 ? (
+                                <div className="p-2 text-xs text-gray-500 italic">No matching notes</div>
+                            ) : (
+                                suggestions.map((s, idx) => (
+                                    <div
+                                        key={s.id}
+                                        onClick={() => insertSuggestion(s.title)}
+                                        className={`px-3 py-2 text-sm cursor-pointer ${
+                                            idx === suggestionIndex 
+                                                ? 'bg-primary text-primary-foreground' 
+                                                : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+                                        }`}
+                                    >
+                                        {s.title}
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    )}
+                </div>
             )}
         </div>
         <div className="p-2 text-xs text-gray-500 border-t dark:border-gray-700 text-center bg-background/50 rounded-b-lg">
             {isPreview 
                 ? 'View Mode • Ctrl+Enter: Edit • Shift+Enter: Close • Esc: Close' 
-                : 'Edit Mode • Shift+Enter: Save & View • Ctrl+Enter: Cancel & Close • Esc: Cancel & Close'
+                : 'Edit Mode • [[ for links • Shift+Enter: Save & View • Ctrl+Enter: Cancel & Close • Esc: Cancel'
             }
         </div>
       </div>

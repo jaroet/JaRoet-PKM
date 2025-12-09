@@ -101,7 +101,7 @@ export const seedDatabase = async () => {
     const n1 = {
       id: crypto.randomUUID(),
       title: 'Welcome to JaRoet PKM',
-      content: '# Welcome\n\nThis is your Central Note. Use arrow keys to navigate.',
+      content: '# Welcome\n\nThis is your Central Note. Use arrow keys to navigate.\n\nYou can link to other notes using [[WikiLinks]].',
       linksTo: [],
       relatedTo: [],
       isFavorite: false,
@@ -123,6 +123,11 @@ export const seedDatabase = async () => {
 
 export const getNote = async (id: string): Promise<Note | undefined> => {
   return await db.notes.get(id);
+};
+
+export const findNoteByTitle = async (title: string): Promise<Note | undefined> => {
+    // Case-insensitive exact match using IndexedDB index
+    return await db.notes.where('title').equalsIgnoreCase(title).first();
 };
 
 export const createNote = async (title: string): Promise<Note> => {
@@ -347,28 +352,122 @@ export const getAllNotes = async (): Promise<Note[]> => {
   return await db.notes.toArray();
 };
 
-export const importNotes = async (notes: Note[]) => {
-  // Clear existing notes
-  await db.notes.clear();
-
-  // Process in small chunks with yields to avoid blowing up memory/transaction limits and crashing the tab
-  const CHUNK_SIZE = 50; 
-  for (let i = 0; i < notes.length; i += CHUNK_SIZE) {
-    const chunk = notes.slice(i, i + CHUNK_SIZE);
-    await db.notes.bulkAdd(chunk);
-    
-    // YIELD to the main thread. This is crucial for preventing "Aw Snap" on large imports.
-    // It allows the browser to handle other events and GC.
-    await new Promise(resolve => setTimeout(resolve, 10));
-  }
-
-  // Update Meta
-  const favorites = notes.filter(n => n.isFavorite).map(n => n.id);
-  await db.meta.put({ key: 'favoritesList', value: favorites });
+export const importNotes = async (notes: Note[], mode: 'overwrite' | 'merge') => {
   
-  // Reset central note to first one if possible
-  if (notes.length > 0) {
-      await db.meta.put({ key: 'currentCentralNoteId', value: notes[0].id });
-      await db.meta.put({ key: 'homeNoteId', value: notes[0].id });
+  if (mode === 'overwrite') {
+    // === OVERWRITE MODE (Legacy Behavior) ===
+    
+    // Clear existing notes
+    await db.notes.clear();
+
+    // Process in small chunks with yields to avoid blowing up memory/transaction limits and crashing the tab
+    const CHUNK_SIZE = 50; 
+    for (let i = 0; i < notes.length; i += CHUNK_SIZE) {
+      const chunk = notes.slice(i, i + CHUNK_SIZE);
+      await db.notes.bulkAdd(chunk);
+      
+      // YIELD to the main thread.
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+
+    // Update Meta
+    const favorites = notes.filter(n => n.isFavorite).map(n => n.id);
+    await db.meta.put({ key: 'favoritesList', value: favorites });
+    
+    // Reset central note to first one if possible
+    if (notes.length > 0) {
+        await db.meta.put({ key: 'currentCentralNoteId', value: notes[0].id });
+        await db.meta.put({ key: 'homeNoteId', value: notes[0].id });
+    }
+
+  } else {
+    // === MERGE MODE ===
+    
+    // 1. Fetch Existing Data for collision checking
+    const existingNotes = await db.notes.toArray();
+    // Create a Set of lowercase titles for fast case-insensitive lookup
+    const existingTitles = new Set(existingNotes.map(n => n.title.toLowerCase()));
+
+    // 2. ID Mapping
+    // We MUST regenerate IDs for imported notes to prevent collisions.
+    // Map: OldID (from file) -> NewID (generated)
+    const idMap = new Map<string, string>();
+    notes.forEach(note => {
+        idMap.set(note.id, crypto.randomUUID());
+    });
+
+    // 3. Process Import Batch
+    const notesToAdd: Note[] = [];
+    const renamedNoteIds: string[] = []; // Track IDs of renamed notes
+    
+    // Using simple counter for collision resolution
+    // We add to existingTitles as we go to handle internal duplicates in the batch too
+    for (const note of notes) {
+        let newTitle = note.title;
+        let isRenamed = false;
+        let counter = 1;
+
+        // Check collision
+        while (existingTitles.has(newTitle.toLowerCase())) {
+            newTitle = `${note.title} (${counter})`;
+            counter++;
+            isRenamed = true;
+        }
+
+        // Add to checklist so subsequent notes in this loop don't collide with this one
+        existingTitles.add(newTitle.toLowerCase());
+        
+        const newId = idMap.get(note.id)!;
+        
+        if (isRenamed) {
+            renamedNoteIds.push(newId);
+        }
+
+        // Remap relationships
+        // If a note links to an ID not in the map (e.g. was deleted in source), we remove the link
+        const newLinksTo = note.linksTo.map(oldId => idMap.get(oldId)).filter(Boolean) as string[];
+        const newRelatedTo = note.relatedTo.map(oldId => idMap.get(oldId)).filter(Boolean) as string[];
+
+        notesToAdd.push({
+            ...note,
+            id: newId,
+            title: newTitle,
+            linksTo: newLinksTo,
+            relatedTo: newRelatedTo,
+            // We keep original timestamps or update? Keeping originals preserves history.
+        });
+    }
+
+    // 4. Create Audit Parent (if renames occurred)
+    if (renamedNoteIds.length > 0) {
+        const now = new Date();
+        const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
+        const auditTitle = `import_${dateStr}`;
+        const auditId = crypto.randomUUID();
+        
+        const auditNote: Note = {
+            id: auditId,
+            title: auditTitle,
+            content: `# Import Audit\n\nNotes imported on ${dateStr} that required renaming due to name collisions.`,
+            linksTo: renamedNoteIds, // The renamed notes are children of this node
+            relatedTo: [],
+            isFavorite: false,
+            createdAt: now.getTime(),
+            modifiedAt: now.getTime()
+        };
+        
+        notesToAdd.push(auditNote);
+    }
+
+    // 5. Bulk Add Merged Notes
+    const CHUNK_SIZE = 50; 
+    for (let i = 0; i < notesToAdd.length; i += CHUNK_SIZE) {
+      const chunk = notesToAdd.slice(i, i + CHUNK_SIZE);
+      await db.notes.bulkAdd(chunk);
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    
+    // Note: In Merge mode, we do NOT change the user's current favorite list or central note ID.
+    // They stay exactly where they were.
   }
 };

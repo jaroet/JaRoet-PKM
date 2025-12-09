@@ -2,6 +2,38 @@
 
 All notable changes to the JaRoet PKM project will be documented in this file.
 
+## [0.2.20] - 2024-05-23
+
+### Added
+- **Dynamic Journal Subtitles:** The "Active Note" card now intelligently detects if a note title is a Journal entry (format `YYYY-MM-DD` or `YYYY-MM`). If matched, it dynamically calculates and displays the day of the week (e.g., "Monday") or the month name (e.g., "October") below the title. This is calculated on the fly without modifying the database.
+
+## [0.2.19] - 2024-05-23
+
+### Changed
+- **Journal Date Format:** Updated standard journal note naming convention to `YYYY-MM-DD`, `YYYY-MM`, and `YYYY` (removing day/month names and "Journal" prefix). This aligns better with other PKM tools and sorting standards.
+- **Optimization:** Refactored the journal service to use the high-speed indexed database lookup function (`findNoteByTitle`) from the main DB service, significantly improving performance when navigating dates in large vaults.
+- **Converter Tool:** Updated the standalone Obsidian converter to output journal entries using the new ISO date format hierarchy.
+
+## [0.2.18] - 2024-05-23
+
+### Added
+- **Internal WikiLinks:** Added support for internal linking using `[[Note Title]]` or `[[Note Title|Alias]]` syntax.
+- **Smart Navigation:** Clicking an internal link now instantly navigates to that note. If the Markdown Editor is open, it refreshes to show the new note's content; otherwise, it refocuses the canvas.
+- **Performance Optimization:** Internal link lookups use the database index, ensuring instant navigation even with thousands of notes, without slowing down the initial page render.
+
+## [0.2.17] - 2024-05-23
+
+### Changed
+- **Markdown Styling:** Unified the CSS styling for the Content Preview on the canvas and the Markdown Editor. Both now share a "compact" list style that reduces vertical spacing for lists and tasks, ensuring visual consistency.
+- **Task Checkboxes:** The Content Preview now renders checkboxes with better alignment and spacing, matching the editor's look (though they remain read-only on the canvas).
+
+## [0.2.16] - 2024-05-23
+
+### Changed
+- **Linking Workflow (Single Note):** When no notes are selected, using link hotkeys (`Ctrl+Arrows`) or clicking the top bar link buttons now opens the Linker Modal for the **currently focused note** instead of the central active note. This allows you to add relationships to any note without having to navigate to it first.
+- **Top Bar Buttons:** The Link buttons (Parent/Child/Related) are now always enabled. Clicking them on a focused note (without a selection) triggers the "Add Link" modal for that specific note.
+- **Selection Logic Preserved:** When multiple notes are selected, the linking tools continue to function as "Move/Relink" tools relative to the Central Note, preserving existing bulk editing workflows.
+
 ## [0.2.15] - 2024-05-23
 
 ### Added

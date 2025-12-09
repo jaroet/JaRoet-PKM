@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
 import { marked } from 'marked';
-import { db, getTopology, createNote, updateNote, deleteNote, getFavorites, toggleFavorite, seedDatabase, getNote, getAllNotes, importNotes, getHomeNoteId, searchNotes, getFontSize, getNoteCount, getVaultList, getCurrentVaultName, switchVault, getAppTheme, AppTheme, getSectionVisibility } from './services/db';
+import { db, getTopology, createNote, updateNote, deleteNote, getFavorites, toggleFavorite, seedDatabase, getNote, getAllNotes, importNotes, getHomeNoteId, searchNotes, getFontSize, getNoteCount, getVaultList, getCurrentVaultName, switchVault, getAppTheme, AppTheme, getSectionVisibility, findNoteByTitle } from './services/db';
 import { goToToday } from './services/journal';
 import { Note, Section, Topology, SearchResult } from './types';
 import NoteCard from './components/NoteCard';
@@ -8,12 +8,12 @@ import LinkerModal from './components/LinkerModal';
 import MarkdownEditor from './components/MarkdownEditor';
 import SettingsModal from './components/SettingsModal';
 import RenameModal from './components/RenameModal';
+import ImportModal from './components/ImportModal';
 
 // --- Markdown Configuration ---
-// Configure marked to open external links in a new tab with icon
-const renderer = new marked.Renderer();
 
-// Robust adapter for different marked versions (args vs object)
+// 1. External Link Renderer
+const renderer = new marked.Renderer();
 renderer.link = function(hrefOrObj: string | { href: string; title?: string; text: string }, title?: string | null, text?: string) {
     let href: string = '';
     let linkTitle: string | null | undefined = title;
@@ -41,12 +41,65 @@ renderer.link = function(hrefOrObj: string | { href: string; title?: string; tex
     return output;
 };
 
-// Enable checkboxes for tasks
 renderer.checkbox = function(checked) {
-    return `<input type="checkbox" ${checked ? 'checked="" ' : ''} class="task-list-item-checkbox" disabled>`;
+    return `<input type="checkbox" ${checked ? 'checked="" ' : ''} class="task-list-item-checkbox" disabled style="margin-right: 0.6em; vertical-align: middle;">`;
 };
 
-marked.use({ renderer });
+// 2. WikiLink Extension ( [[Internal Link]] )
+// matches [[Title]] or [[Title|Alias]]
+const wikiLinkExtension = {
+    name: 'wikiLink',
+    level: 'inline',
+    start(src: string) { return src.match(/\[\[/)?.index; },
+    tokenizer(src: string) {
+        // Match [[ ... ]]
+        // Group 1: Content inside brackets
+        const rule = /^\[\[([^\]]+)\]\]/;
+        const match = rule.exec(src);
+        if (match) {
+            const inner = match[1];
+            // Split by pipe for alias
+            const parts = inner.split('|');
+            const title = parts[0].trim();
+            const alias = parts.length > 1 ? parts.slice(1).join('|').trim() : title;
+            
+            return {
+                type: 'wikiLink',
+                raw: match[0],
+                title: title,
+                alias: alias
+            };
+        }
+    },
+    renderer(token: any) {
+        return `<a class="internal-link text-primary hover:underline cursor-pointer" data-title="${token.title}">${token.alias}</a>`;
+    }
+};
+
+marked.use({ 
+    renderer, 
+    extensions: [wikiLinkExtension as any] 
+});
+
+// Shared styles for markdown content (editor and preview)
+const compactMarkdownStyles = `
+  .compact-markdown ul, .compact-markdown ol {
+      margin-top: 0.25em !important;
+      margin-bottom: 0.25em !important;
+  }
+  .compact-markdown li {
+      margin-top: 0 !important;
+      margin-bottom: 0 !important;
+  }
+  .compact-markdown li > p {
+      margin-top: 0 !important;
+      margin-bottom: 0 !important;
+  }
+  .compact-markdown li.task-list-item {
+      list-style-type: none;
+      padding-left: 0;
+  }
+`;
 
 function App() {
   // --- State ---
@@ -76,6 +129,10 @@ function App() {
   // Remember last index for each section
   const [sectionIndices, setSectionIndices] = useState({ up: 0, down: 0, left: 0, right: 0, favs: 0 });
 
+  // Scroll Position State
+  // We use a Ref to track scroll positions to avoid re-renders on every scroll event
+  const scrollPositionsRef = useRef<Record<string, number>>({});
+
   // Selection State
   const [selectedNoteIds, setSelectedNoteIds] = useState<Set<string>>(new Set());
   // Ref to track selection for event handlers to avoid stale closures
@@ -101,6 +158,10 @@ function App() {
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   
+  // Import State
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [pendingImportData, setPendingImportData] = useState<Note[]>([]);
+
   // Content Preview State
   const [previewHtml, setPreviewHtml] = useState('');
   
@@ -204,6 +265,8 @@ function App() {
       setSectionIndices({ up: 0, down: 0, left: 0, right: 0, favs: 0 });
       // Clear selection on navigation
       setSelectedNoteIds(new Set());
+      // Reset Scroll Positions when center changes
+      scrollPositionsRef.current = {};
       updateTotalCount();
     }
   }, [centralNoteId]);
@@ -386,6 +449,44 @@ function App() {
     }
   };
 
+  // Internal Linking Logic
+  const handleInternalLinkClick = async (title: string) => {
+      // 1. Check if note exists
+      const targetNote = await findNoteByTitle(title);
+      
+      if (targetNote) {
+          // 2. Set Central Note
+          setCentralNoteId(targetNote.id);
+          
+          // 3. Smart View Switch
+          // If we are currently in the Editor, and the target has content -> Keep Editor Open (refresh content)
+          // If target is empty -> Close Editor, focus canvas
+          if (editorOpen) {
+              if (targetNote.content && targetNote.content.trim().length > 0) {
+                  // Keep editor open, just refresh content (handled by useEffect on note prop)
+                  // We need to ensure focus updates if we navigated to a new center
+              } else {
+                  // Target empty, close editor to show context
+                  setEditorOpen(false);
+              }
+          }
+      } else {
+          alert(`Note "${title}" not found.`);
+      }
+  };
+
+  // Handle clicks in Canvas Content Preview
+  const handleCanvasContentClick = (e: React.MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.classList.contains('internal-link')) {
+          e.preventDefault();
+          const title = target.getAttribute('data-title');
+          if (title) {
+              handleInternalLinkClick(title);
+          }
+      }
+  };
+
   const goHome = useCallback(async () => {
     const homeId = await getHomeNoteId();
     if (homeId) {
@@ -495,8 +596,7 @@ function App() {
 
           // 2. Link new (if not just unlink)
           if (type === 'up') {
-            // Target becomes Parent of Center (Center links TO Target? No, Uppers link TO Center)
-            // Wait, "Parent" means Target links to Center.
+            // Target becomes Parent of Center (Target links TO Center)
             const target = await getNote(id);
             if (target) {
                 await updateNote(id, { linksTo: [...target.linksTo, centralNoteId] });
@@ -535,7 +635,12 @@ function App() {
   };
 
   const handleLinkerSelect = async (targetId: string | null, newTitle?: string) => {
-    if (!centralNoteId) return;
+    // Determine Anchor: Use focused note if available, otherwise central note
+    // This allows linking TO any focused note, not just the central one
+    const focusedNote = getFocusedNote();
+    const anchorId = focusedNote ? focusedNote.id : centralNoteId;
+    
+    if (!anchorId) return;
 
     const cleanRelationships = async (centerId: string, targetId: string) => {
         const center = await getNote(centerId);
@@ -556,18 +661,22 @@ function App() {
     };
     
     const linkToTarget = async (id: string) => {
-        await cleanRelationships(centralNoteId, id);
+        await cleanRelationships(anchorId, id);
+        
         if (linkerType === 'up') {
+            // Target becomes Parent of Anchor (Target links TO Anchor)
             const target = await getNote(id);
-            if (target) await updateNote(id, { linksTo: [...target.linksTo, centralNoteId] });
+            if (target) await updateNote(id, { linksTo: [...target.linksTo, anchorId] });
         } else if (linkerType === 'down') {
-            const center = await getNote(centralNoteId);
-            if (center) await updateNote(centralNoteId, { linksTo: [...center.linksTo, id] });
+            // Target becomes Child of Anchor (Anchor links TO Target)
+            const anchor = await getNote(anchorId);
+            if (anchor) await updateNote(anchorId, { linksTo: [...anchor.linksTo, id] });
         } else if (linkerType === 'left') {
-            const center = await getNote(centralNoteId);
-            if (center) await updateNote(centralNoteId, { relatedTo: [...center.relatedTo, id] });
+            // Lateral
+            const anchor = await getNote(anchorId);
+            if (anchor) await updateNote(anchorId, { relatedTo: [...anchor.relatedTo, id] });
             const target = await getNote(id);
-            if (target) await updateNote(id, { relatedTo: [...target.relatedTo, centralNoteId] });
+            if (target) await updateNote(id, { relatedTo: [...target.relatedTo, anchorId] });
         }
     };
 
@@ -586,8 +695,21 @@ function App() {
         await linkToTarget(targetId);
     }
 
-    loadTopology(centralNoteId);
+    // Always reload center to reflect potential changes in view
+    if (centralNoteId) loadTopology(centralNoteId);
     updateTotalCount();
+  };
+
+  // Wrapper for Top Bar Buttons
+  const handleLinkButtonAction = (type: 'up' | 'down' | 'left') => {
+      // If items are selected, we perform the "Move" logic (Relative to Center)
+      if (selectedNoteIdsRef.current.size > 0) {
+          changeRelationship(type);
+      } else {
+          // If no selection, we perform the "Add Link" logic (Relative to Focused Note)
+          setLinkerType(type);
+          setLinkerOpen(true);
+      }
   };
 
   const handleSearchSelect = (id: string) => {
@@ -610,6 +732,7 @@ function App() {
     setShowMainMenu(false);
   };
 
+  // Trigger file selection, then process contents for Modal
   const importData = () => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -626,15 +749,15 @@ function App() {
                 const text = event.target?.result as string;
                 if (!text) throw new Error("Empty file");
                 const notes = JSON.parse(text);
-                await importNotes(notes);
+                
+                // Instead of immediately importing, we set state and open Modal
+                setPendingImportData(notes);
+                setImportModalOpen(true);
+                
                 document.body.removeChild(input);
-                // Reload to refresh DB connection and state
-                setTimeout(() => {
-                    window.location.reload();
-                }, 500);
             } catch (err) {
                 console.error(err);
-                alert('Error importing file.');
+                alert('Error parsing file.');
                 if (document.body.contains(input)) document.body.removeChild(input);
             }
         };
@@ -645,6 +768,20 @@ function App() {
     };
     input.click();
     setShowMainMenu(false);
+  };
+
+  const handleConfirmImport = async (mode: 'overwrite' | 'merge') => {
+      setImportModalOpen(false);
+      try {
+          await importNotes(pendingImportData, mode);
+          // Reload to refresh DB connection and state
+          setTimeout(() => {
+              window.location.reload();
+          }, 500);
+      } catch (e) {
+          console.error(e);
+          alert("Import failed. See console for details.");
+      }
   };
 
   const handleGlobalKeyDown = useCallback(async (e: KeyboardEvent) => {
@@ -674,7 +811,7 @@ function App() {
         }
     }
 
-    if (renameModalOpen || isSearchActive || editorOpen || linkerOpen || settingsOpen) return;
+    if (renameModalOpen || isSearchActive || editorOpen || linkerOpen || settingsOpen || importModalOpen) return;
 
     if (e.key === '/') {
       e.preventDefault();
@@ -1028,7 +1165,7 @@ function App() {
         } 
     }
 
-  }, [focusedSection, focusedIndex, topology, favorites, centralNoteId, renameModalOpen, isSearchActive, editorOpen, linkerOpen, settingsOpen, fontSize, sectionIndices, getFocusedNote, getSortedNotes, showFavDropdown, showMainMenu, selectedNoteIds, showFavorites, showContent, handleDeleteAction]);
+  }, [focusedSection, focusedIndex, topology, favorites, centralNoteId, renameModalOpen, isSearchActive, editorOpen, linkerOpen, settingsOpen, fontSize, sectionIndices, getFocusedNote, getSortedNotes, showFavDropdown, showMainMenu, selectedNoteIds, showFavorites, showContent, handleDeleteAction, importModalOpen]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleGlobalKeyDown);
@@ -1037,8 +1174,30 @@ function App() {
 
   const renderSection = (notes: Note[], section: Section, containerClasses: string, itemClasses: string, containerId: string) => {
     const sortedNotes = [...notes].sort((a, b) => a.title.localeCompare(b.title));
+    
+    // Restore scroll position effect
+    useLayoutEffect(() => {
+        const el = document.getElementById(containerId);
+        if (el) {
+            // Restore saved position or default to 0
+            const savedPos = scrollPositionsRef.current[containerId] || 0;
+            if (el.scrollTop !== savedPos) {
+                el.scrollTop = savedPos;
+            }
+        }
+    }, [sortedNotes.map(n => n.id).join(','), section]); 
+
+    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+        const target = e.target as HTMLDivElement;
+        scrollPositionsRef.current[containerId] = target.scrollTop;
+    };
+
     return (
-        <div id={containerId} className={containerClasses}>
+        <div 
+            id={containerId} 
+            className={containerClasses}
+            onScroll={handleScroll}
+        >
             {sortedNotes.map((note, idx) => (
                 <NoteCard
                     key={note.id}
@@ -1067,10 +1226,34 @@ function App() {
   const activeNote = getFocusedNote();
   const activeNoteHasContent = activeNote?.content && activeNote.content.trim().length > 0;
   const hasSelection = selectedNoteIds.size > 0;
-  const linkToolActive = hasSelection || (focusedSection !== 'center' && focusedSection !== 'content' && focusedSection !== 'right' && focusedSection !== 'favs');
+  const canUnlink = hasSelection || (focusedSection !== 'center' && focusedSection !== 'content' && focusedSection !== 'right' && focusedSection !== 'favs');
+
+  const getDateSubtitle = (title: string): string | null => {
+      // YYYY-MM-DD
+      if (/^\d{4}-\d{2}-\d{2}$/.test(title)) {
+          // Parse parts to avoid UTC issues
+          const [y, m, d] = title.split('-').map(Number);
+          const date = new Date(y, m - 1, d);
+          if (!isNaN(date.getTime())) {
+              return date.toLocaleDateString('en-US', { weekday: 'long' });
+          }
+      }
+      // YYYY-MM
+      if (/^\d{4}-\d{2}$/.test(title)) {
+          const [y, m] = title.split('-').map(Number);
+          const date = new Date(y, m - 1, 1);
+          if (!isNaN(date.getTime())) {
+              return date.toLocaleDateString('en-US', { month: 'long' });
+          }
+      }
+      return null;
+  };
+
+  const centerSubtitle = topology.center ? getDateSubtitle(topology.center.title) : null;
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground font-sans">
+      <style>{compactMarkdownStyles}</style>
       
       <div className="flex-1 flex flex-col h-full min-w-0">
         
@@ -1136,10 +1319,8 @@ function App() {
                              >
                                 <span className="w-5 flex justify-center text-primary">
                                     {isDarkMode ? (
-                                        // Sun Icon for "Switch to Light"
                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
                                     ) : (
-                                        // Moon Icon for "Switch to Dark"
                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
                                     )}
                                 </span>
@@ -1290,36 +1471,33 @@ function App() {
              <div className="flex items-center gap-1">
                 <button 
                     onClick={() => changeRelationship('unlink')}
-                    disabled={!linkToolActive}
+                    disabled={!canUnlink}
                     title="Unlink Selected/Focused Note (Backspace)" 
-                    className={`p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${!linkToolActive ? 'opacity-30 cursor-not-allowed' : ''}`}
+                    className={`p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${!canUnlink ? 'opacity-30 cursor-not-allowed' : ''}`}
                     style={{ color: 'var(--theme-accent)' }}
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
                 </button>
                 <button 
-                    onClick={() => changeRelationship('left')}
-                    disabled={!linkToolActive}
+                    onClick={() => handleLinkButtonAction('left')}
                     title="Link as Related (Ctrl+Left)" 
-                    className={`p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${!linkToolActive ? 'opacity-30 cursor-not-allowed' : ''}`}
+                    className="p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
                     style={{ color: 'var(--theme-accent)' }}
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
                 </button>
                 <button 
-                    onClick={() => changeRelationship('up')}
-                    disabled={!linkToolActive}
+                    onClick={() => handleLinkButtonAction('up')}
                     title="Link as Parent (Ctrl+Up)" 
-                    className={`p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${!linkToolActive ? 'opacity-30 cursor-not-allowed' : ''}`}
+                    className="p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
                     style={{ color: 'var(--theme-accent)' }}
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
                 </button>
                 <button 
-                    onClick={() => changeRelationship('down')}
-                    disabled={!linkToolActive}
+                    onClick={() => handleLinkButtonAction('down')}
                     title="Link as Child (Ctrl+Down)" 
-                    className={`p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${!linkToolActive ? 'opacity-30 cursor-not-allowed' : ''}`}
+                    className="p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
                     style={{ color: 'var(--theme-accent)' }}
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>
@@ -1452,6 +1630,7 @@ function App() {
                                         isFocused={focusedSection === 'center'}
                                         isCenter={true}
                                         onClick={() => {}}
+                                        subtitle={centerSubtitle}
                                     />
                                     {/* Status Icons (Moved to Section Container) */}
                                     <div className="absolute bottom-4 right-4 flex gap-1 pointer-events-none">
@@ -1501,12 +1680,13 @@ function App() {
                     {showContent && (
                         <div 
                             ref={contentPreviewRef}
+                            onClick={handleCanvasContentClick}
                             className={`flex-1 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0 outline-none ${focusedSection === 'content' ? 'ring-2 ring-[var(--theme-accent)]' : ''}`}
                             tabIndex={-1}
                         >
                              <div className={labelStyle} style={{ fontSize: `${Math.max(10, fontSize - 10)}px` }}>Content</div>
                              <div 
-                                className="absolute inset-0 p-6 overflow-auto custom-scrollbar prose dark:prose-invert max-w-none rounded-3xl pt-8"
+                                className="absolute inset-0 p-6 overflow-auto custom-scrollbar prose dark:prose-invert max-w-none rounded-3xl pt-8 compact-markdown"
                                 dangerouslySetInnerHTML={{ __html: previewHtml }}
                              />
                         </div>
@@ -1519,7 +1699,7 @@ function App() {
         {/* --- Footer / Status Bar --- */}
         <div style={{ fontSize: `${uiFontSize}px` }} className="h-8 flex-shrink-0 bg-[var(--theme-bars)] flex items-center justify-between px-4 text-foreground z-50 transition-colors duration-300">
             <div className="flex-shrink-0 opacity-90">
-                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.2.15
+                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.2.19
             </div>
             <div className="opacity-60 truncate ml-4 text-right">
                 Arrows: Nav | Space: Open | Enter: Center Focus | Shift+Enter: Edit | Ctrl+Arrows: Link | F2: Rename | Bksp: Unlink
@@ -1544,6 +1724,7 @@ function App() {
             updateNote(id, { content });
             loadTopology(centralNoteId!);
         }}
+        onInternalLinkClick={handleInternalLinkClick}
       />
       <RenameModal
         isOpen={renameModalOpen}
@@ -1559,6 +1740,12 @@ function App() {
         onFontSizeChange={setFontSize}
         onThemeChange={() => setThemeTick(t => t + 1)}
         onSettingsChange={refreshSettings}
+      />
+      <ImportModal 
+        isOpen={importModalOpen}
+        importData={pendingImportData}
+        onClose={() => setImportModalOpen(false)}
+        onConfirm={handleConfirmImport}
       />
     </div>
   );
