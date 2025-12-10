@@ -133,4 +133,5 @@ Accessible via the Main Menu (☰).
 ---
 
 ## Standalone Tools
-The release includes `obsidian_to_jaroet.html`, a tool to convert an Obsidian Vault folder into a JSON file compatible with JaRoet's import. It preserves folder structures and converts journal entries to the JaRoet ISO format.
+The release includes `obsidian_to_jaroet.html`, a tool to convert an Obsidian Vault folder into a JSON file compatible with JaRoet's import. It preserves folder structures and converts journal entries to the JaRoet ISO format. This is not a 100% release ready so use with care (I have succesfully used it to convert my Obsidian Vault). I will make some improvements to it and release it in a future release. For now you can use it at your own risk!
+
