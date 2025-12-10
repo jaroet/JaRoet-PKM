@@ -5,6 +5,39 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>JaRoet PKM</title>
     
+    <!-- CRITICAL FIX: UUID Polyfill for file:// protocol -->
+    <script>
+      if (typeof crypto === 'undefined') {
+        window.crypto = {};
+      }
+      if (!window.crypto.randomUUID) {
+        console.warn("Polyfilling crypto.randomUUID for insecure context (local file)");
+        window.crypto.randomUUID = function() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        };
+      }
+      
+      // Global Error Trap
+      window.onerror = function(msg, url, line, col, error) {
+        const root = document.getElementById('root');
+        if (root) {
+            root.innerHTML = `
+                <div style="padding: 2rem; color: #ef4444; font-family: sans-serif;">
+                    <h1 style="font-size: 1.5rem; font-weight: bold; margin-bottom: 1rem;">Application Crashed</h1>
+                    <p style="margin-bottom: 0.5rem;"><b>Error:</b> ${msg}</p>
+                    <p style="margin-bottom: 1rem;"><b>Location:</b> Line ${line}:${col}</p>
+                    <pre style="background: #f3f4f6; padding: 1rem; border-radius: 0.5rem; overflow: auto; color: #374151;">${error ? error.stack : 'No stacktrace available'}</pre>
+                    <button onclick="window.location.reload()" style="margin-top: 1rem; padding: 0.5rem 1rem; background: #3b82f6; color: white; border: none; border-radius: 0.25rem; cursor: pointer;">Reload Application</button>
+                </div>
+            `;
+        }
+        return false;
+      };
+    </script>
+    
     <!-- Tailwind CSS (via CDN) -->
     <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
     <script>
@@ -84,8 +117,8 @@
     </style>
     
     <!-- Libraries -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.js"></script>
     <script src="https://unpkg.com/marked@9.1.2/marked.min.js"></script>
     <!-- Babel for on-the-fly compilation -->
@@ -94,7 +127,7 @@
 <body>
     <div id="root"></div>
 
-    <script type="text/babel" data-presets="react,typescript">
+    <script type="text/babel">
         // --- React Hooks & Global Shims ---
         const { useState, useEffect, useRef, useCallback, useLayoutEffect } = React;
         
@@ -167,13 +200,6 @@
         editorRenderer.checkbox = function(checked) {
             return `<input type="checkbox" ${checked ? 'checked="" ' : ''} class="task-list-item-checkbox" style="cursor: pointer; margin-right: 0.6em; vertical-align: middle;">`;
         };
-
-        // --- 1. Types & Interfaces (Shimmed for JS execution) ---
-        // Interfaces are stripped by Babel, so we just declare nothing here.
-        
-        // --- 2. Database Services ---
-        
-        // Dexie is available globally as 'Dexie'
 
         // --- Vault Management ---
 
@@ -1832,12 +1858,9 @@
           .compact-markdown li.task-list-item {
               list-style-type: none;
               padding-left: 0;
-          }
+  }
         `;
 
-        const rootElement = document.getElementById('root');
-        const root = ReactDOM.createRoot(rootElement);
-        
         function App() {
           const [centralNoteId, setCentralNoteId] = useState(null);
           const [topology, setTopology] = useState({
@@ -2514,9 +2537,9 @@
             if (e.key === 'Backspace') {
               e.preventDefault();
               if (selectedNoteIdsRef.current.size > 0) {
-                  await changeRelationship('unlink');
-                  return;
-              }
+          await changeRelationship('unlink');
+          return;
+      }
               const note = getFocusedNote();
               if (note && centralNoteId && focusedSection !== 'center' && focusedSection !== 'right' && focusedSection !== 'favs' && focusedSection !== 'content') {
                 await changeRelationship('unlink');
@@ -3368,7 +3391,7 @@
         {/* --- Footer / Status Bar --- */}
         <div style={{ fontSize: `${uiFontSize}px` }} className="h-8 flex-shrink-0 bg-[var(--theme-bars)] flex items-center justify-between px-4 text-foreground z-50 transition-colors duration-300">
             <div className="flex-shrink-0 opacity-90">
-                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.2.20
+                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.3.0
             </div>
             <div className="opacity-60 truncate ml-4 text-right">
                 Arrows: Nav | Space: Open | Enter: Center Focus | Shift+Enter: Edit | Ctrl+Arrows: Link | F2: Rename | Bksp: Unlink

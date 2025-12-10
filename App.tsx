@@ -1224,11 +1224,19 @@ function App() {
 
   }, [focusedSection, focusedIndex, topology, favorites, centralNoteId, renameModalOpen, isSearchActive, editorOpen, linkerOpen, settingsOpen, fontSize, sectionIndices, getFocusedNote, getSortedNotes, showFavDropdown, showMainMenu, selectedNoteIds, showFavorites, showContent, handleDeleteAction, importModalOpen]);
 
-  useEffect(() => {
-    window.addEventListener('keydown', handleGlobalKeyDown);
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [handleGlobalKeyDown]);
+  // Robust Event Listener Attachment
+  const handleKeyDownRef = useRef(handleGlobalKeyDown);
   
+  useEffect(() => {
+    handleKeyDownRef.current = handleGlobalKeyDown;
+  }, [handleGlobalKeyDown]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => handleKeyDownRef.current(e);
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+          
   // UI Calculations
   const labelStyle = "absolute -top-[5px] left-6 px-3 py-0.5 font-bold tracking-wider bg-[var(--theme-section)] text-[color-mix(in_srgb,var(--theme-accent)_50%,transparent)] select-none z-20 pointer-events-none rounded-full border border-black/10 dark:border-white/10";
   const uiFontSize = Math.max(14, fontSize - 4);
@@ -1257,13 +1265,13 @@ function App() {
       }
       return null;
   };
-
+  
   const centerSubtitle = topology.center ? getDateSubtitle(topology.center.title) : null;
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground font-sans">
       <style>{compactMarkdownStyles}</style>
-      
+
       <div className="flex-1 flex flex-col h-full min-w-0">
         
         {/* Top Bar - Compacted */}
@@ -1773,7 +1781,7 @@ function App() {
         {/* --- Footer / Status Bar --- */}
         <div style={{ fontSize: `${uiFontSize}px` }} className="h-8 flex-shrink-0 bg-[var(--theme-bars)] flex items-center justify-between px-4 text-foreground z-50 transition-colors duration-300">
             <div className="flex-shrink-0 opacity-90">
-                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.2.20
+                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.3.0
             </div>
             <div className="opacity-60 truncate ml-4 text-right">
                 Arrows: Nav | Space: Open | Enter: Center Focus | Shift+Enter: Edit | Ctrl+Arrows: Link | F2: Rename | Bksp: Unlink
