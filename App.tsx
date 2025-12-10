@@ -101,6 +101,63 @@ const compactMarkdownStyles = `
   }
 `;
 
+// --- NoteSection Component ---
+interface NoteSectionProps {
+  notes: Note[];
+  section: Section;
+  containerClasses: string;
+  itemClasses: string;
+  containerId: string;
+  fontSize: number;
+  focusedSection: Section;
+  focusedIndex: number;
+  selectedNoteIds: Set<string>;
+  centralNoteId: string | null;
+  onNoteClick: (id: string, isCtrl: boolean) => void;
+  scrollPositionsRef: React.MutableRefObject<Record<string, number>>;
+}
+
+const NoteSection: React.FC<NoteSectionProps> = ({ 
+    notes, section, containerClasses, itemClasses, containerId, 
+    fontSize, focusedSection, focusedIndex, selectedNoteIds, centralNoteId, 
+    onNoteClick, scrollPositionsRef 
+}) => {
+    const sortedNotes = [...notes].sort((a, b) => a.title.localeCompare(b.title));
+    
+    // Restore scroll
+    useLayoutEffect(() => {
+        const el = document.getElementById(containerId);
+        if (el) {
+            const savedPos = scrollPositionsRef.current[containerId] || 0;
+            if (el.scrollTop !== savedPos) {
+                el.scrollTop = savedPos;
+            }
+        }
+    }, [sortedNotes.map(n => n.id).join(','), section, containerId, scrollPositionsRef]);
+
+    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+        const target = e.target as HTMLDivElement;
+        scrollPositionsRef.current[containerId] = target.scrollTop;
+    };
+
+    return (
+        <div id={containerId} className={containerClasses} onScroll={handleScroll}>
+            {sortedNotes.map((note, idx) => (
+                <NoteCard
+                    key={note.id}
+                    id={`note-${section}-${idx}`}
+                    note={note}
+                    fontSize={fontSize}
+                    isFocused={focusedSection === section && focusedIndex === idx}
+                    isSelected={selectedNoteIds.has(note.id)}
+                    onClick={(e) => onNoteClick(note.id, e.ctrlKey)}
+                    className={itemClasses}
+                />
+            ))}
+        </div>
+    );
+};
+
 function App() {
   // --- State ---
   const [centralNoteId, setCentralNoteId] = useState<string | null>(null);
@@ -1171,54 +1228,6 @@ function App() {
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, [handleGlobalKeyDown]);
-
-  const renderSection = (notes: Note[], section: Section, containerClasses: string, itemClasses: string, containerId: string) => {
-    const sortedNotes = [...notes].sort((a, b) => a.title.localeCompare(b.title));
-    
-    // Restore scroll position effect
-    useLayoutEffect(() => {
-        const el = document.getElementById(containerId);
-        if (el) {
-            // Restore saved position or default to 0
-            const savedPos = scrollPositionsRef.current[containerId] || 0;
-            if (el.scrollTop !== savedPos) {
-                el.scrollTop = savedPos;
-            }
-        }
-    }, [sortedNotes.map(n => n.id).join(','), section]); 
-
-    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-        const target = e.target as HTMLDivElement;
-        scrollPositionsRef.current[containerId] = target.scrollTop;
-    };
-
-    return (
-        <div 
-            id={containerId} 
-            className={containerClasses}
-            onScroll={handleScroll}
-        >
-            {sortedNotes.map((note, idx) => (
-                <NoteCard
-                    key={note.id}
-                    id={`note-${section}-${idx}`}
-                    note={note}
-                    fontSize={fontSize}
-                    isFocused={focusedSection === section && focusedIndex === idx}
-                    isSelected={selectedNoteIds.has(note.id)}
-                    onClick={(e) => {
-                        if (e.ctrlKey) {
-                            handleToggleSelection(note.id);
-                        } else {
-                            if (note.id !== centralNoteId) setCentralNoteId(note.id);
-                        }
-                    }}
-                    className={itemClasses}
-                />
-            ))}
-        </div>
-    );
-  };
   
   // UI Calculations
   const labelStyle = "absolute -top-[5px] left-6 px-3 py-0.5 font-bold tracking-wider bg-[var(--theme-section)] text-[color-mix(in_srgb,var(--theme-accent)_50%,transparent)] select-none z-20 pointer-events-none rounded-full border border-black/10 dark:border-white/10";
@@ -1575,26 +1584,52 @@ function App() {
                     {/* Related (Top Left) */}
                     <div className={`${showFavorites ? 'flex-1' : 'h-full'} relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0`}>
                         <div className={labelStyle} style={{ fontSize: `${Math.max(10, fontSize - 10)}px` }}>Related</div>
-                        {renderSection(
-                            topology.lefters, 
-                            'left', 
-                            'absolute inset-0 flex flex-col gap-0 overflow-y-auto p-3 custom-scrollbar rounded-3xl pt-6',
-                            'w-full',
-                            'container-left'
-                        )}
+                        <NoteSection
+                            notes={topology.lefters}
+                            section="left"
+                            containerClasses="absolute inset-0 flex flex-col gap-0 overflow-y-auto p-3 custom-scrollbar rounded-3xl pt-6"
+                            itemClasses="w-full"
+                            containerId="container-left"
+                            fontSize={fontSize}
+                            focusedSection={focusedSection}
+                            focusedIndex={focusedIndex}
+                            selectedNoteIds={selectedNoteIds}
+                            centralNoteId={centralNoteId}
+                            onNoteClick={(id, isCtrl) => {
+                                if (isCtrl) {
+                                    handleToggleSelection(id);
+                                } else {
+                                    if (id !== centralNoteId) setCentralNoteId(id);
+                                }
+                            }}
+                            scrollPositionsRef={scrollPositionsRef}
+                        />
                     </div>
 
                     {/* Favorites (Bottom Left) - Conditional */}
                     {showFavorites && (
                         <div className="flex-1 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
                             <div className={labelStyle} style={{ fontSize: `${Math.max(10, fontSize - 10)}px` }}>Favorites</div>
-                            {renderSection(
-                                favorites, 
-                                'favs', 
-                                'absolute inset-0 flex flex-col gap-0 overflow-y-auto p-3 custom-scrollbar rounded-3xl pt-6',
-                                'w-full',
-                                'container-favs'
-                            )}
+                            <NoteSection
+                                notes={favorites}
+                                section="favs"
+                                containerClasses="absolute inset-0 flex flex-col gap-0 overflow-y-auto p-3 custom-scrollbar rounded-3xl pt-6"
+                                itemClasses="w-full"
+                                containerId="container-favs"
+                                fontSize={fontSize}
+                                focusedSection={focusedSection}
+                                focusedIndex={focusedIndex}
+                                selectedNoteIds={selectedNoteIds}
+                                centralNoteId={centralNoteId}
+                                onNoteClick={(id, isCtrl) => {
+                                    if (isCtrl) {
+                                        handleToggleSelection(id);
+                                    } else {
+                                        if (id !== centralNoteId) setCentralNoteId(id);
+                                    }
+                                }}
+                                scrollPositionsRef={scrollPositionsRef}
+                            />
                         </div>
                     )}
                 </div>
@@ -1609,13 +1644,26 @@ function App() {
                         <div className="flex-[7] relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
                              <div className={labelStyle} style={{ fontSize: `${Math.max(10, fontSize - 10)}px` }}>Parents</div>
                              <div className="absolute inset-0 overflow-x-auto overflow-y-hidden custom-scrollbar rounded-3xl pt-6">
-                                {renderSection(
-                                    topology.uppers, 
-                                    'up', 
-                                    'h-full w-fit flex flex-col flex-wrap content-start gap-0 p-3 mx-auto', 
-                                    'w-[300px] flex-shrink-0',
-                                    'container-up'
-                                )}
+                                <NoteSection
+                                    notes={topology.uppers}
+                                    section="up"
+                                    containerClasses="h-full w-fit flex flex-col flex-wrap content-start gap-0 p-3 mx-auto"
+                                    itemClasses="w-[300px] flex-shrink-0"
+                                    containerId="container-up"
+                                    fontSize={fontSize}
+                                    focusedSection={focusedSection}
+                                    focusedIndex={focusedIndex}
+                                    selectedNoteIds={selectedNoteIds}
+                                    centralNoteId={centralNoteId}
+                                    onNoteClick={(id, isCtrl) => {
+                                        if (isCtrl) {
+                                            handleToggleSelection(id);
+                                        } else {
+                                            if (id !== centralNoteId) setCentralNoteId(id);
+                                        }
+                                    }}
+                                    scrollPositionsRef={scrollPositionsRef}
+                                />
                              </div>
                         </div>
 
@@ -1650,13 +1698,26 @@ function App() {
                     <div className="flex-1 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
                         <div className={labelStyle} style={{ fontSize: `${Math.max(10, fontSize - 10)}px` }}>Children</div>
                         <div className="absolute inset-0 overflow-x-auto overflow-y-hidden custom-scrollbar rounded-3xl pt-6">
-                            {renderSection(
-                                topology.downers, 
-                                'down', 
-                                'h-full w-fit flex flex-col flex-wrap content-start gap-0 p-3 mx-auto', 
-                                'w-[300px] flex-shrink-0',
-                                'container-down'
-                            )}
+                            <NoteSection
+                                notes={topology.downers}
+                                section="down"
+                                containerClasses="h-full w-fit flex flex-col flex-wrap content-start gap-0 p-3 mx-auto"
+                                itemClasses="w-[300px] flex-shrink-0"
+                                containerId="container-down"
+                                fontSize={fontSize}
+                                focusedSection={focusedSection}
+                                focusedIndex={focusedIndex}
+                                selectedNoteIds={selectedNoteIds}
+                                centralNoteId={centralNoteId}
+                                onNoteClick={(id, isCtrl) => {
+                                    if (isCtrl) {
+                                        handleToggleSelection(id);
+                                    } else {
+                                        if (id !== centralNoteId) setCentralNoteId(id);
+                                    }
+                                }}
+                                scrollPositionsRef={scrollPositionsRef}
+                            />
                         </div>
                     </div>
                 </div>
@@ -1667,13 +1728,26 @@ function App() {
                     {/* Siblings (Top Right) */}
                     <div className={`${showContent ? 'flex-1' : 'h-full'} relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0`}>
                         <div className={labelStyle} style={{ fontSize: `${Math.max(10, fontSize - 10)}px` }}>Siblings</div>
-                         {renderSection(
-                            topology.righters, 
-                            'right', 
-                            'flex flex-col gap-0 overflow-y-auto p-3 h-full custom-scrollbar rounded-3xl pt-6', 
-                            'w-full',
-                            'container-right'
-                        )}
+                         <NoteSection
+                            notes={topology.righters}
+                            section="right"
+                            containerClasses="flex flex-col gap-0 overflow-y-auto p-3 h-full custom-scrollbar rounded-3xl pt-6"
+                            itemClasses="w-full"
+                            containerId="container-right"
+                            fontSize={fontSize}
+                            focusedSection={focusedSection}
+                            focusedIndex={focusedIndex}
+                            selectedNoteIds={selectedNoteIds}
+                            centralNoteId={centralNoteId}
+                            onNoteClick={(id, isCtrl) => {
+                                if (isCtrl) {
+                                    handleToggleSelection(id);
+                                } else {
+                                    if (id !== centralNoteId) setCentralNoteId(id);
+                                }
+                            }}
+                            scrollPositionsRef={scrollPositionsRef}
+                        />
                     </div>
 
                     {/* Content Preview (Bottom Right) - Conditional */}
@@ -1699,7 +1773,7 @@ function App() {
         {/* --- Footer / Status Bar --- */}
         <div style={{ fontSize: `${uiFontSize}px` }} className="h-8 flex-shrink-0 bg-[var(--theme-bars)] flex items-center justify-between px-4 text-foreground z-50 transition-colors duration-300">
             <div className="flex-shrink-0 opacity-90">
-                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.2.19
+                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.2.20
             </div>
             <div className="opacity-60 truncate ml-4 text-right">
                 Arrows: Nav | Space: Open | Enter: Center Focus | Shift+Enter: Edit | Ctrl+Arrows: Link | F2: Rename | Bksp: Unlink
