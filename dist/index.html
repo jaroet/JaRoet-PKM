@@ -202,6 +202,26 @@
             return `<input type="checkbox" ${checked ? 'checked="" ' : ''} class="task-list-item-checkbox" style="cursor: pointer; margin-right: 0.6em; vertical-align: middle;">`;
         };
 
+        // --- App Styles Constants (Added here to fix ReferenceError) ---
+        const compactMarkdownStyles = `
+          .compact-markdown ul, .compact-markdown ol {
+              margin-top: 0.25em !important;
+              margin-bottom: 0.25em !important;
+          }
+          .compact-markdown li {
+              margin-top: 0 !important;
+              margin-bottom: 0 !important;
+          }
+          .compact-markdown li > p {
+              margin-top: 0 !important;
+              margin-bottom: 0 !important;
+          }
+          .compact-markdown li.task-list-item {
+              list-style-type: none;
+              padding-left: 0;
+          }
+        `;
+
         // --- Vault Management ---
 
         const VAULT_LIST_KEY = 'nexusnode_vaults';
