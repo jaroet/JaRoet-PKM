@@ -9,9 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^19.2.0",
     "dexie": "^4.2.1",
-    "react-dom": "^19.2.0",
+    "react": "^19.2.1",
     "marked": "^17.0.1"
   },
   "devDependencies": {
