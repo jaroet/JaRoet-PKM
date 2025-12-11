@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { SearchResult } from '../types';
 import { 
@@ -13,6 +14,7 @@ import {
     getAppTheme,
     setAppTheme,
     AppTheme,
+    ThemeConfig,
     getSectionVisibility,
     setSectionVisibility
 } from '../services/db';
@@ -26,6 +28,46 @@ interface SettingsModalProps {
   onThemeChange: () => void;
   onSettingsChange: () => void;
 }
+
+// --- Theme Presets Definition ---
+const PRESETS = {
+    light: [
+        { 
+            name: 'Classic Slate', 
+            colors: { background: '#f1f5f9', section: '#ffffff', bars: '#e2e8f0', accent: '#3b82f6' } 
+        },
+        { 
+            name: 'Warm Paper', 
+            colors: { background: '#f5f5f4', section: '#ffffff', bars: '#e7e5e4', accent: '#f97316' } 
+        },
+        { 
+            name: 'Soft Sage', 
+            colors: { background: '#f0fdf4', section: '#ffffff', bars: '#dcfce7', accent: '#15803d' } 
+        },
+        { 
+            name: 'Minimalist', 
+            colors: { background: '#e5e5e5', section: '#ffffff', bars: '#d4d4d4', accent: '#171717' } 
+        },
+    ],
+    dark: [
+        { 
+            name: 'Classic Navy', 
+            colors: { background: '#1e293b', section: '#0f172a', bars: '#0f172a', accent: '#60a5fa' } 
+        },
+        { 
+            name: 'Deep Night', 
+            colors: { background: '#020617', section: '#1e293b', bars: '#1e293b', accent: '#818cf8' } 
+        },
+        { 
+            name: 'Forest', 
+            colors: { background: '#022c22', section: '#064e3b', bars: '#064e3b', accent: '#34d399' } 
+        },
+        { 
+            name: 'High Contrast', 
+            colors: { background: '#000000', section: '#121212', bars: '#121212', accent: '#facc15' } 
+        },
+    ]
+};
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, currentCentralNoteId, fontSize, onFontSizeChange, onThemeChange, onSettingsChange }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'theme' | 'database'>('general');
@@ -131,6 +173,19 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, currentC
       onThemeChange();
   };
 
+  const applyPreset = async (presetColors: ThemeConfig) => {
+      if (!appTheme) return;
+      const newTheme = {
+          ...appTheme,
+          [themeMode]: {
+              ...presetColors
+          }
+      };
+      setLocalAppTheme(newTheme);
+      await setAppTheme(newTheme);
+      onThemeChange();
+  };
+
   const handleVisibilityChange = async (key: 'showFavorites' | 'showContent', val: boolean) => {
       if (key === 'showFavorites') setShowFavorites(val);
       if (key === 'showContent') setShowContent(val);
@@ -161,6 +216,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, currentC
       }
   };
 
+  // Helper to check equality for highlighting current preset
+  const isCurrentPreset = (preset: ThemeConfig) => {
+      if (!appTheme) return false;
+      const current = appTheme[themeMode];
+      return (
+          current.background.toLowerCase() === preset.background.toLowerCase() &&
+          current.section.toLowerCase() === preset.section.toLowerCase() &&
+          current.bars.toLowerCase() === preset.bars.toLowerCase() &&
+          current.accent.toLowerCase() === preset.accent.toLowerCase()
+      );
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -168,7 +235,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, currentC
       <div className="w-full max-w-4xl h-[85vh] bg-background rounded-xl shadow-2xl border border-gray-200 dark:border-gray-800 flex flex-col">
         {/* Header */}
         <div className="flex justify-between items-center p-6 pb-2">
-            <h2 className="text-xl font-bold">Settings</h2>
+            <h2 className="text-xl font-bold text-foreground">Settings</h2>
             <button onClick={onClose} className="text-gray-500 hover:text-foreground">✕</button>
         </div>
         
@@ -207,7 +274,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, currentC
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-6 text-foreground">
             
             {activeTab === 'general' && (
                 <div className="space-y-6">
@@ -317,57 +384,107 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, currentC
                         </button>
                     </div>
 
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <div className="flex flex-col">
-                                <span className="font-medium text-sm">Background Color</span>
-                                <span className="text-xs text-gray-500">The gutters/canvas background</span>
-                            </div>
-                            <input 
-                                type="color" 
-                                value={appTheme[themeMode].background}
-                                onChange={e => handleThemeUpdate('background', e.target.value)}
-                                className="h-8 w-14 p-0 border-0 rounded cursor-pointer"
-                            />
+                    {/* Presets Grid */}
+                    <div className="mb-6">
+                        <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Default Themes</h3>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {PRESETS[themeMode].map((preset) => (
+                                <div 
+                                    key={preset.name}
+                                    onClick={() => applyPreset(preset.colors)}
+                                    className={`
+                                        cursor-pointer rounded-lg border-2 overflow-hidden transition-all group
+                                        ${isCurrentPreset(preset.colors) 
+                                            ? 'border-primary ring-2 ring-primary ring-offset-1 ring-offset-background' 
+                                            : 'border-transparent hover:scale-105 shadow-sm hover:shadow-md'
+                                        }
+                                    `}
+                                    title={preset.name}
+                                >
+                                    {/* Simulated Screen Preview */}
+                                    <div className="w-full h-20 flex flex-col" style={{ backgroundColor: preset.colors.background }}>
+                                        {/* Top Bar */}
+                                        <div className="h-4 w-full flex items-center px-1 gap-1 border-b border-black/5 dark:border-white/5" style={{ backgroundColor: preset.colors.bars }}>
+                                            <div className="w-2 h-2 rounded-full opacity-50" style={{ backgroundColor: preset.colors.accent }}></div>
+                                        </div>
+                                        
+                                        {/* Body */}
+                                        <div className="flex-1 p-2 flex gap-1.5 justify-center items-start">
+                                             {/* Column 1 */}
+                                             <div className="w-1/4 h-3/4 rounded-[2px] opacity-80" style={{ backgroundColor: preset.colors.section }}></div>
+                                             {/* Column 2 (Center) */}
+                                             <div className="w-1/3 h-full rounded-[2px] relative shadow-sm" style={{ backgroundColor: preset.colors.section }}>
+                                                {/* Active Element Dot */}
+                                                <div className="absolute bottom-1 right-1 w-1.5 h-1.5 rounded-full" style={{ backgroundColor: preset.colors.accent }}></div>
+                                             </div>
+                                             {/* Column 3 */}
+                                             <div className="w-1/4 h-3/4 rounded-[2px] opacity-80" style={{ backgroundColor: preset.colors.section }}></div>
+                                        </div>
+                                    </div>
+                                    {/* Label */}
+                                    <div className="text-xs text-center py-2 font-medium bg-gray-50 dark:bg-zinc-900 text-gray-700 dark:text-gray-300 border-t border-gray-100 dark:border-gray-800">
+                                        {preset.name}
+                                    </div>
+                                </div>
+                            ))}
                         </div>
+                    </div>
 
-                        <div className="flex items-center justify-between">
-                            <div className="flex flex-col">
-                                <span className="font-medium text-sm">Section Color</span>
-                                <span className="text-xs text-gray-500">Background for note containers</span>
+                    <div className="border-t border-gray-100 dark:border-gray-800 pt-6 space-y-4">
+                        <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Fine Tune Colors</h3>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="flex items-center justify-between p-2 rounded bg-gray-50 dark:bg-gray-800/50">
+                                <div className="flex flex-col">
+                                    <span className="font-medium text-sm">Background</span>
+                                    <span className="text-xs text-gray-500">Gutters/Canvas</span>
+                                </div>
+                                <input 
+                                    type="color" 
+                                    value={appTheme[themeMode].background}
+                                    onChange={e => handleThemeUpdate('background', e.target.value)}
+                                    className="h-8 w-14 p-0 border-0 rounded cursor-pointer bg-transparent"
+                                />
                             </div>
-                            <input 
-                                type="color" 
-                                value={appTheme[themeMode].section}
-                                onChange={e => handleThemeUpdate('section', e.target.value)}
-                                className="h-8 w-14 p-0 border-0 rounded cursor-pointer"
-                            />
-                        </div>
 
-                        <div className="flex items-center justify-between">
-                            <div className="flex flex-col">
-                                <span className="font-medium text-sm">Bars Background</span>
-                                <span className="text-xs text-gray-500">Top bar and status bar</span>
+                            <div className="flex items-center justify-between p-2 rounded bg-gray-50 dark:bg-gray-800/50">
+                                <div className="flex flex-col">
+                                    <span className="font-medium text-sm">Section</span>
+                                    <span className="text-xs text-gray-500">Cards/Containers</span>
+                                </div>
+                                <input 
+                                    type="color" 
+                                    value={appTheme[themeMode].section}
+                                    onChange={e => handleThemeUpdate('section', e.target.value)}
+                                    className="h-8 w-14 p-0 border-0 rounded cursor-pointer bg-transparent"
+                                />
                             </div>
-                            <input 
-                                type="color" 
-                                value={appTheme[themeMode].bars}
-                                onChange={e => handleThemeUpdate('bars', e.target.value)}
-                                className="h-8 w-14 p-0 border-0 rounded cursor-pointer"
-                            />
-                        </div>
 
-                        <div className="flex items-center justify-between">
-                            <div className="flex flex-col">
-                                <span className="font-medium text-sm">Accent Color</span>
-                                <span className="text-xs text-gray-500">Icons and active elements</span>
+                            <div className="flex items-center justify-between p-2 rounded bg-gray-50 dark:bg-gray-800/50">
+                                <div className="flex flex-col">
+                                    <span className="font-medium text-sm">Bars</span>
+                                    <span className="text-xs text-gray-500">Top/Status Bar</span>
+                                </div>
+                                <input 
+                                    type="color" 
+                                    value={appTheme[themeMode].bars}
+                                    onChange={e => handleThemeUpdate('bars', e.target.value)}
+                                    className="h-8 w-14 p-0 border-0 rounded cursor-pointer bg-transparent"
+                                />
                             </div>
-                            <input 
-                                type="color" 
-                                value={appTheme[themeMode].accent}
-                                onChange={e => handleThemeUpdate('accent', e.target.value)}
-                                className="h-8 w-14 p-0 border-0 rounded cursor-pointer"
-                            />
+
+                            <div className="flex items-center justify-between p-2 rounded bg-gray-50 dark:bg-gray-800/50">
+                                <div className="flex flex-col">
+                                    <span className="font-medium text-sm">Accent</span>
+                                    <span className="text-xs text-gray-500">Icons/Highlights</span>
+                                </div>
+                                <input 
+                                    type="color" 
+                                    value={appTheme[themeMode].accent}
+                                    onChange={e => handleThemeUpdate('accent', e.target.value)}
+                                    className="h-8 w-14 p-0 border-0 rounded cursor-pointer bg-transparent"
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>
