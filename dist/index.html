@@ -25,20 +25,7 @@
             }
         }
     </script>
-    <style>
-      :root{--background:#f8fafc;--foreground:#0f172a;--card:#ffffff;--card-foreground:#0f172a;--primary:#3b82f6;--primary-foreground:#ffffff;--scrollbar-thumb:#94a3b8}
-      .dark{--background:#0f172a;--foreground:#f8fafc;--card:#1e293b;--card-foreground:#f8fafc;--primary:#60a5fa;--primary-foreground:#0f172a;--scrollbar-thumb:#475569}
-      body{background-color:var(--background);color:var(--foreground);transition:background-color 0.3s,color 0.3s}
-      .custom-scrollbar{scrollbar-width:thin;scrollbar-color:var(--scrollbar-thumb) transparent}
-      .custom-scrollbar::-webkit-scrollbar{width:12px;height:12px;display:block}
-      .custom-scrollbar::-webkit-scrollbar-track{background:transparent}
-      .custom-scrollbar::-webkit-scrollbar-thumb{background-color:var(--scrollbar-thumb);border-radius:6px;border:3px solid transparent;background-clip:content-box}
-      .custom-scrollbar::-webkit-scrollbar-thumb:hover{background-color:var(--primary)}
-      .compact-markdown ul,.compact-markdown ol{margin-top:0.25em!important;margin-bottom:0.25em!important}
-      .compact-markdown li{margin-top:0!important;margin-bottom:0!important}
-      .compact-markdown li>p{margin-top:0!important;margin-bottom:0!important}
-      .compact-markdown li.task-list-item{list-style-type:none;padding-left:0}
-    </style>
+    <link rel="stylesheet" href="css/style.css">
 
     <!-- DEPENDENCIES -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -64,6 +51,8 @@
     <script src="js/components/SettingsModal.js"></script>
     <script src="js/components/ImportModal.js"></script>
     <script src="js/components/RenameModal.js"></script>
+    <script src="js/components/TopBar.js"></script>
+    <script src="js/components/StatusBar.js"></script>
     
     <!-- MAIN APP -->
     <script src="js/App.js"></script>

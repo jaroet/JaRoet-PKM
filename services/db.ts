@@ -2,7 +2,7 @@
 import Dexie, { Table } from 'dexie';
 import { Note, Topology, SearchResult } from '../types';
 
-export const APP_VERSION = '0.3.8';
+export const APP_VERSION = '0.3.11';
 
 // --- Vault Management ---
 

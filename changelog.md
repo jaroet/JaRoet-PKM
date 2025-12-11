@@ -3,6 +3,49 @@
 
 All notable changes to the JaRoet PKM project will be documented in this file.
 
+## [0.3.14] - 2024-05-24
+
+### Fixed
+- **Search Dropdown Navigation:** Fixed an issue where the search result list would not scroll to follow the selected item when navigating with the Up/Down arrow keys.
+
+## [0.3.13] - 2024-05-24
+
+### Improved
+- **Visuals:** Restored the accent color to top bar icons. Icons now consistently use the user-defined theme accent color (default blue), with inactive toggles fading to gray.
+- **Status Bar:** 
+    - Increased font size for better readability.
+    - Updated layout to `Notes: XXX | <vaultname> | <version>`.
+    - The version number is now a clickable link pointing to the GitHub releases page.
+
+## [0.3.12] - 2024-05-24
+
+### Refactor
+- **Component Extraction:** Extracted `TopBar` and `StatusBar` from `App.js` into their own component files for better modularity and maintainability.
+- **CSS Extraction:** Moved all application styles from `index.html` into a dedicated `dist/css/style.css` file.
+- **UI Polish:** 
+    - Updated `TopBar` and `StatusBar` to use the theme's bar color variable (`--theme-bars`) consistently.
+    - Added subtle borders (`border-b` for TopBar, `border-t` for StatusBar) to create better visual separation from the canvas.
+    - Improved vertical alignment of icons and text in the top navigation.
+
+## [0.3.11] - 2024-05-24
+
+### Refactor (Major)
+- **Modular Architecture:** The monolithic `App.js` in the distribution build has been split into smaller, maintainable modules to improve code organization and readability.
+    - **`js/components/NoteSection.js`**: Handles the rendering of note lists.
+    - **`js/hooks/useHistory.js`**: Reusable hook for navigation history management.
+    - **`js/globals.js`**: Centralized namespace management.
+    - **`index.html`**: Updated to load these modules in the correct dependency order.
+
+### Features
+- **Settings Overhaul:** The Settings modal has been completely redesigned to match the full feature set of the development version.
+    - **Tabbed Interface**: Organized into General, Theme, and Database tabs.
+    - **Advanced Theme Editor**: Fine-grained control over colors (Background, Section, Bars, Accent) for both Light and Dark modes.
+    - **Home Note Search**: Added a search bar to easily find and set your specific Home note.
+    - **Vault Management**: New UI controls to create new vaults and reset or delete the current one directly from settings.
+
+### Fixed
+- **Unlink Logic:** The "Unlink" button in the top bar now correctly enables when a *single* note is focused in a relational section (Parents, Children, or Related). Previously, it only activated when multiple notes were explicitly selected via `x`.
+
 ## [0.3.9] - 2024-05-23
 
 ### Fixed
