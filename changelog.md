@@ -1,6 +1,34 @@
+
 # Changelog
 
 All notable changes to the JaRoet PKM project will be documented in this file.
+
+## [0.3.4] - 2024-05-23
+
+### Fixed
+- **Calendar Visibility:** Fixed an issue where the calendar indicators for future dates or non-today entries were too faint or invisible. The indicator line is now a solid accent color for all dates that contain a note, regardless of whether it is "Today" or not.
+
+## [0.3.3] - 2024-05-23
+
+### Changed
+- **Calendar UI:** Refined the visual design of the calendar dropdown. 
+    - Today's date is now highlighted with **accent-colored text** (instead of a background pill) for a cleaner look.
+    - The "has note" indicator is now a distinct line at the bottom of the cell, separated from the number to improve legibility.
+    - Increased day cell size for better touch targets and spacing.
+- **Version:** Bumped version number to 0.3.3.
+
+## [0.3.2] - 2024-05-23
+
+### Fixed
+- **Calendar:** Fixed an issue where days with existing entries were not being underlined in the calendar dropdown. This was due to an over-optimized database query. Reverted to a robust `toArray()` fetch to ensure data consistency.
+- **UI Adjustment:** Increased the visibility of the calendar date indicators (made them larger and explicitly blue) to improve readability.
+
+## [0.3.1] - 2024-05-23
+
+### Changed
+- **Calendar Logic:** Changed the calendar week start from Sunday to Monday for better alignment with international standards.
+- **UI Adjustment:** Adjusted the positioning of the Calendar Dropdown to anchor to the left of the button, ensuring it expands into the screen rather than off the left edge.
+- **Version:** Bumped version number to 0.3.1.
 
 ## [0.3.0] - 2024-05-23
 

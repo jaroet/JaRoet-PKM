@@ -1,3 +1,4 @@
+
 import Dexie, { Table } from 'dexie';
 import { Note, Topology, SearchResult } from '../types';
 
@@ -128,6 +129,12 @@ export const getNote = async (id: string): Promise<Note | undefined> => {
 export const findNoteByTitle = async (title: string): Promise<Note | undefined> => {
     // Case-insensitive exact match using IndexedDB index
     return await db.notes.where('title').equalsIgnoreCase(title).first();
+};
+
+export const getNoteTitlesByPrefix = async (prefix: string): Promise<string[]> => {
+    // We use toArray() instead of uniqueKeys() to ensure robustness across Dexie versions and data states.
+    const notes = await db.notes.where('title').startsWith(prefix).toArray();
+    return notes.map(n => n.title);
 };
 
 export const createNote = async (title: string): Promise<Note> => {

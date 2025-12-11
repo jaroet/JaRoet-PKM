@@ -1,17 +1,12 @@
+
 import { createNote, getNote, findNoteByTitle, updateNote } from './db';
 import { Note } from '../types';
 
 // Helper: Format Date
-// We no longer need day/month arrays for titles, but keeping them if we ever need content generation later.
-const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-
 const formatDate = (d: Date) => {
     const yyyy = d.getFullYear();
     const mm = String(d.getMonth() + 1).padStart(2, '0');
     const dd = String(d.getDate()).padStart(2, '0');
-    // const dayName = days[d.getDay()]; // Unused in new format
-    // const monthName = months[d.getMonth()]; // Unused in new format
     
     return {
         full: `${yyyy}-${mm}-${dd}`,
@@ -21,9 +16,8 @@ const formatDate = (d: Date) => {
     };
 };
 
-export const goToToday = async (): Promise<string> => {
-    const now = new Date();
-    const dateInfo = formatDate(now);
+export const goToDate = async (targetDate: Date): Promise<string> => {
+    const dateInfo = formatDate(targetDate);
     
     // 1. Ensure Root Hub
     let hub = await findNoteByTitle('Journal Hub');
@@ -57,7 +51,7 @@ export const goToToday = async (): Promise<string> => {
         }
     }
 
-    // 4. Ensure Today (Title: "YYYY-MM-DD")
+    // 4. Ensure Today/Target Date (Title: "YYYY-MM-DD")
     let dayNote = await findNoteByTitle(dateInfo.full);
     
     // Check if it's newly created
@@ -70,30 +64,31 @@ export const goToToday = async (): Promise<string> => {
             await updateNote(monthNote.id, { linksTo: [...freshMonth.linksTo, dayNote.id] });
         }
 
-        // 5. Link Yesterday (Lateral)
-        const yesterdayDate = new Date(now);
-        yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-        const yInfo = formatDate(yesterdayDate);
-        const yesterdayNote = await findNoteByTitle(yInfo.full);
+        // 5. Link Previous Day (Lateral)
+        // Note: We use targetDate, not 'now'
+        const previousDate = new Date(targetDate);
+        previousDate.setDate(previousDate.getDate() - 1);
+        const yInfo = formatDate(previousDate);
+        const previousNote = await findNoteByTitle(yInfo.full);
         
-        if (yesterdayNote) {
+        if (previousNote) {
              const freshDay = await getNote(dayNote.id);
-             const freshYesterday = await getNote(yesterdayNote.id);
+             const freshPrevious = await getNote(previousNote.id);
              
-             if (freshDay && freshYesterday) {
-                 if (!freshDay.relatedTo.includes(yesterdayNote.id)) {
-                     await updateNote(freshDay.id, { relatedTo: [...freshDay.relatedTo, yesterdayNote.id] });
+             if (freshDay && freshPrevious) {
+                 if (!freshDay.relatedTo.includes(previousNote.id)) {
+                     await updateNote(freshDay.id, { relatedTo: [...freshDay.relatedTo, previousNote.id] });
                  }
-                 if (!freshYesterday.relatedTo.includes(freshDay.id)) {
-                     await updateNote(freshYesterday.id, { relatedTo: [...freshYesterday.relatedTo, freshDay.id] });
+                 if (!freshPrevious.relatedTo.includes(freshDay.id)) {
+                     await updateNote(freshPrevious.id, { relatedTo: [...freshPrevious.relatedTo, freshDay.id] });
                  }
              }
         }
 
         // 6. Link "On This Day" (Lateral - Previous Years)
-        // We check up to 5 years back
+        // We check up to 5 years back relative to the target date
         for (let i = 1; i <= 5; i++) {
-            const pastDate = new Date(now);
+            const pastDate = new Date(targetDate);
             pastDate.setFullYear(pastDate.getFullYear() - i);
             const pInfo = formatDate(pastDate);
             const pastNote = await findNoteByTitle(pInfo.full);
@@ -115,4 +110,8 @@ export const goToToday = async (): Promise<string> => {
     }
 
     return dayNote.id;
+};
+
+export const goToToday = async (): Promise<string> => {
+    return goToDate(new Date());
 };
