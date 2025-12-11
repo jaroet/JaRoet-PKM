@@ -129,41 +129,75 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        // --- React Hooks & Global Shims ---
-        const { useState, useEffect, useRef, useCallback, useLayoutEffect } = React;
+        // --- Global React Destructuring ---
+        const { useState, useEffect, useRef, useCallback, useLayoutEffect, useMemo } = React;
+
+        // --- SERVICES: DateUtils ---
+        const formatDateForJournal = (d) => {
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            
+            return {
+                full: `${yyyy}-${mm}-${dd}`,
+                month: `${yyyy}-${mm}`,
+                year: `${yyyy}`,
+                raw: d
+            };
+        };
+
+        const getDateSubtitle = (title) => {
+            // Regex for YYYY-MM-DD
+            if (/^\d{4}-\d{2}-\d{2}$/.test(title)) {
+                const [y, m, d] = title.split('-').map(Number);
+                // Note: Months are 0-indexed in JS Date
+                const date = new Date(y, m - 1, d);
+                if (!isNaN(date.getTime())) {
+                    return date.toLocaleDateString('en-US', { weekday: 'long' });
+                }
+            }
+            // Regex for YYYY-MM
+            if (/^\d{4}-\d{2}$/.test(title)) {
+                const [y, m] = title.split('-').map(Number);
+                const date = new Date(y, m - 1, 1);
+                if (!isNaN(date.getTime())) {
+                    return date.toLocaleDateString('en-US', { month: 'long' });
+                }
+            }
+            return null;
+        };
+
+        // --- SERVICES: Markdown ---
         
-        // --- Configure Marked for External Links (Global) ---
-        const renderer = new marked.Renderer();
-        const originalLink = renderer.link;
-        renderer.link = function(hrefOrObj, title, text) {
-            let linkHref = hrefOrObj || '';
-            let linkTitle = title || '';
+        // Shared Link Renderer Logic
+        const linkRenderer = function(hrefOrObj, title, text) {
+            let href = '';
+            let linkTitle = title;
             let linkText = text || '';
 
             if (typeof hrefOrObj === 'object') {
-                linkHref = hrefOrObj.href;
+                href = hrefOrObj.href;
                 linkTitle = hrefOrObj.title;
                 linkText = hrefOrObj.text;
+            } else {
+                href = hrefOrObj;
             }
 
-            const isExternal = linkHref && (linkHref.startsWith('http') || linkHref.startsWith('//'));
-            const target = isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
+            const isExternal = href && (href.startsWith('http') || href.startsWith('//'));
+            const targetAttr = isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
             const titleAttr = linkTitle ? ` title="${linkTitle}"` : '';
             
-            let output = `<a href="${linkHref}"${titleAttr}${target}>${linkText}`;
+            let output = `<a href="${href}"${titleAttr}${targetAttr}>${linkText}`;
             
             if (isExternal) {
-                 output += '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block ml-0.5 opacity-70 mb-0.5 align-baseline"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>';
+                output += '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block ml-0.5 opacity-70 mb-0.5 align-baseline"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>';
             }
+            
             output += '</a>';
             return output;
         };
-        // Global renderer has disabled checkboxes (for main view)
-        renderer.checkbox = function(checked) {
-            return `<input type="checkbox" ${checked ? 'checked="" ' : ''} class="task-list-item-checkbox" disabled style="margin-right: 0.6em; vertical-align: middle;">`;
-        };
-        
-        // WikiLink Extension
+
+        // Shared WikiLink Extension
         const wikiLinkExtension = {
             name: 'wikiLink',
             level: 'inline',
@@ -189,40 +223,24 @@
             }
         };
 
-        marked.use({ 
-            renderer, 
-            extensions: [wikiLinkExtension] 
-        });
-
-        // --- Editor Specific Renderer ---
-        const editorRenderer = new marked.Renderer();
-        editorRenderer.link = renderer.link; // Re-use link logic
-        // Editor renderer has enabled checkboxes with pointer cursor and spacing
-        editorRenderer.checkbox = function(checked) {
-            return `<input type="checkbox" ${checked ? 'checked="" ' : ''} class="task-list-item-checkbox" style="cursor: pointer; margin-right: 0.6em; vertical-align: middle;">`;
+        // Factory for Renderers
+        const createRenderer = (options) => {
+            const renderer = new marked.Renderer();
+            renderer.link = linkRenderer;
+            
+            if (options.clickableCheckboxes) {
+                renderer.checkbox = function(checked) {
+                    return `<input type="checkbox" ${checked ? 'checked="" ' : ''} class="task-list-item-checkbox" style="cursor: pointer; margin-right: 0.6em; vertical-align: middle;">`;
+                };
+            } else {
+                renderer.checkbox = function(checked) {
+                    return `<input type="checkbox" ${checked ? 'checked="" ' : ''} class="task-list-item-checkbox" disabled style="margin-right: 0.6em; vertical-align: middle;">`;
+                };
+            }
+            return renderer;
         };
 
-        // --- App Styles Constants (Added here to fix ReferenceError) ---
-        const compactMarkdownStyles = `
-          .compact-markdown ul, .compact-markdown ol {
-              margin-top: 0.25em !important;
-              margin-bottom: 0.25em !important;
-          }
-          .compact-markdown li {
-              margin-top: 0 !important;
-              margin-bottom: 0 !important;
-          }
-          .compact-markdown li > p {
-              margin-top: 0 !important;
-              margin-bottom: 0 !important;
-          }
-          .compact-markdown li.task-list-item {
-              list-style-type: none;
-              padding-left: 0;
-          }
-        `;
-
-        // --- Vault Management ---
+        // --- SERVICES: DB ---
 
         const VAULT_LIST_KEY = 'nexusnode_vaults';
         const CURRENT_VAULT_KEY = 'nexusnode_current_vault';
@@ -247,8 +265,6 @@
             return localStorage.getItem(CURRENT_VAULT_KEY) || DEFAULT_VAULT;
         };
 
-        // --- Database Class ---
-
         class PKMDatabase extends Dexie {
           constructor() {
             super(getCurrentVaultName());
@@ -256,13 +272,10 @@
               notes: 'id, title, *linksTo, *relatedTo', 
               meta: 'key',
             });
-            // Dexie automatically adds 'notes' and 'meta' properties
           }
         }
 
         const db = new PKMDatabase();
-
-        // --- Vault Operations ---
 
         const switchVault = (name) => {
             if (getVaultList().includes(name)) {
@@ -302,7 +315,6 @@
             window.location.reload();
         };
 
-        // --- Seed Data ---
         const seedDatabase = async () => {
           const count = await db.notes.count();
           if (count === 0) {
@@ -326,8 +338,6 @@
           }
           return null;
         };
-
-        // --- Core Operations ---
 
         const getNote = async (id) => {
           return await db.notes.get(id);
@@ -385,8 +395,6 @@
             return await db.notes.count();
         };
 
-        // --- Topology ---
-
         const getTopology = async (centerId) => {
           const center = await db.notes.get(centerId);
           if (!center) {
@@ -414,8 +422,6 @@
           };
         };
 
-        // --- Favorites ---
-
         const getFavorites = async () => {
           const meta = await db.meta.get('favoritesList');
           const ids = meta ? meta.value : [];
@@ -440,8 +446,6 @@
           });
         };
 
-        // --- Home Note ---
-
         const getHomeNoteId = async () => {
             const meta = await db.meta.get('homeNoteId');
             return meta ? meta.value : null;
@@ -450,8 +454,6 @@
         const setHomeNoteId = async (id) => {
             await db.meta.put({ key: 'homeNoteId', value: id });
         };
-
-        // --- Settings ---
 
         const getFontSize = async () => {
             const meta = await db.meta.get('fontSize');
@@ -502,8 +504,6 @@
             await db.meta.put({ key: 'appTheme', value: theme });
         };
 
-        // --- Search ---
-
         const searchNotes = async (query) => {
           if (!query) return [];
           const q = query.toLowerCase();
@@ -533,7 +533,6 @@
                     await db.meta.put({ key: 'homeNoteId', value: notes[0].id });
                 }
             } else {
-                // MERGE MODE
                 const existingNotes = await db.notes.toArray();
                 const existingTitles = new Set(existingNotes.map(n => n.title.toLowerCase()));
 
@@ -604,23 +603,10 @@
             }
         };
 
-        // --- Journal Service ---
-        
-        const formatDate = (d) => {
-            const yyyy = d.getFullYear();
-            const mm = String(d.getMonth() + 1).padStart(2, '0');
-            const dd = String(d.getDate()).padStart(2, '0');
-            
-            return {
-                full: `${yyyy}-${mm}-${dd}`,
-                month: `${yyyy}-${mm}`,
-                year: `${yyyy}`,
-                raw: d
-            };
-        };
+        // --- SERVICES: Journal ---
 
         const goToDate = async (targetDate) => {
-            const dateInfo = formatDate(targetDate);
+            const dateInfo = formatDateForJournal(targetDate);
             
             // 1. Ensure Hub
             let hub = await findNoteByTitle('Journal Hub');
@@ -656,8 +642,7 @@
             let dayNote = await findNoteByTitle(dateInfo.full);
             if (!dayNote) {
                 dayNote = await createNote(dateInfo.full);
-                // Empty content per request
-
+                
                 const freshMonth = await getNote(monthNote.id);
                 if (freshMonth && !freshMonth.linksTo.includes(dayNote.id)) {
                     await updateNote(monthNote.id, { linksTo: [...freshMonth.linksTo, dayNote.id] });
@@ -666,7 +651,7 @@
                 // 5. Link Previous Day
                 const previousDate = new Date(targetDate);
                 previousDate.setDate(previousDate.getDate() - 1);
-                const yInfo = formatDate(previousDate);
+                const yInfo = formatDateForJournal(previousDate);
                 const previousNote = await findNoteByTitle(yInfo.full);
                 
                 if (previousNote) {
@@ -686,7 +671,7 @@
                 for (let i = 1; i <= 5; i++) {
                     const pastDate = new Date(targetDate);
                     pastDate.setFullYear(pastDate.getFullYear() - i);
-                    const pInfo = formatDate(pastDate);
+                    const pInfo = formatDateForJournal(pastDate);
                     const pastNote = await findNoteByTitle(pInfo.full);
                     if (pastNote) {
                         const freshDay = await getNote(dayNote.id);
@@ -710,7 +695,7 @@
             return goToDate(new Date());
         };
 
-        // --- Custom Hook: useHistory ---
+        // --- HOOKS: useHistory ---
         const MAX_HISTORY = 50;
 
         function useHistory(initialId = null) {
@@ -767,7 +752,7 @@
             };
         }
 
-        // --- Components ---
+        // --- COMPONENTS ---
 
         // -- NoteCard --
         const NoteCard = ({ note, isFocused, isSelected, isCenter, fontSize, onClick, className, id, subtitle }) => {
@@ -1244,6 +1229,9 @@
           const textareaRef = useRef(null);
           const containerRef = useRef(null);
           const previewRef = useRef(null);
+
+          // Use the shared renderer factory with clickable checkboxes for the editor
+          const editorRenderer = useRef(createRenderer({ clickableCheckboxes: true })).current;
 
           // Initialize state when modal opens or note ID changes
           useEffect(() => {
@@ -2040,6 +2028,34 @@
         };
 
         // --- App ---
+
+        // Configure Global Marked Instance (used for Preview in Main Canvas)
+        const renderer = createRenderer({ clickableCheckboxes: false });
+
+        marked.use({ 
+            renderer, 
+            extensions: [wikiLinkExtension] 
+        });
+
+        // Shared styles for markdown content
+        const compactMarkdownStyles = `
+          .compact-markdown ul, .compact-markdown ol {
+              margin-top: 0.25em !important;
+              margin-bottom: 0.25em !important;
+          }
+          .compact-markdown li {
+              margin-top: 0 !important;
+              margin-bottom: 0 !important;
+          }
+          .compact-markdown li > p {
+              margin-top: 0 !important;
+              margin-bottom: 0 !important;
+          }
+          .compact-markdown li.task-list-item {
+              list-style-type: none;
+              padding-left: 0;
+          }
+        `;
 
         function App() {
           const { currentId: centralNoteId, visit, replace, back, forward, canBack, canForward } = useHistory();
@@ -3075,24 +3091,6 @@
           const hasSelection = selectedNoteIds.size > 0;
           const canUnlink = hasSelection || (focusedSection !== 'center' && focusedSection !== 'content' && focusedSection !== 'right' && focusedSection !== 'favs');
 
-          const getDateSubtitle = (title) => {
-              if (/^\d{4}-\d{2}-\d{2}$/.test(title)) {
-                  const [y, m, d] = title.split('-').map(Number);
-                  const date = new Date(y, m - 1, d);
-                  if (!isNaN(date.getTime())) {
-                      return date.toLocaleDateString('en-US', { weekday: 'long' });
-                  }
-              }
-              if (/^\d{4}-\d{2}$/.test(title)) {
-                  const [y, m] = title.split('-').map(Number);
-                  const date = new Date(y, m - 1, 1);
-                  if (!isNaN(date.getTime())) {
-                      return date.toLocaleDateString('en-US', { month: 'long' });
-                  }
-              }
-              return null;
-          };
-          
           const centerSubtitle = topology.center ? getDateSubtitle(topology.center.title) : null;
 
           return (
@@ -3193,6 +3191,7 @@
                     )}
                 </div>
 
+                {/* Navigation History */}
                 <div className="flex items-center gap-0.5">
                     <button
                         onClick={() => back()}
@@ -3608,13 +3607,11 @@
 
         <div style={{ fontSize: `${uiFontSize}px` }} className="h-8 flex-shrink-0 bg-[var(--theme-bars)] flex items-center justify-between px-4 text-foreground z-50 transition-colors duration-300">
             <div className="flex-shrink-0 opacity-90">
-                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.3.5
+                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.3.6
             </div>
             <div className="opacity-60 truncate ml-4 text-right">
                 Arrows: Nav | Space: Open | Enter: Center Focus | Shift+Enter: Edit | Ctrl+Arrows: Link | F2: Rename | Bksp: Unlink
             </div>
-        </div>
-
         </div>
 
         <LinkerModal 

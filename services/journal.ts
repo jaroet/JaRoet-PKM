@@ -1,23 +1,10 @@
 
 import { createNote, getNote, findNoteByTitle, updateNote } from './db';
 import { Note } from '../types';
-
-// Helper: Format Date
-const formatDate = (d: Date) => {
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    
-    return {
-        full: `${yyyy}-${mm}-${dd}`,
-        month: `${yyyy}-${mm}`,
-        year: `${yyyy}`,
-        raw: d
-    };
-};
+import { formatDateForJournal } from './dateUtils';
 
 export const goToDate = async (targetDate: Date): Promise<string> => {
-    const dateInfo = formatDate(targetDate);
+    const dateInfo = formatDateForJournal(targetDate);
     
     // 1. Ensure Root Hub
     let hub = await findNoteByTitle('Journal Hub');
@@ -68,7 +55,7 @@ export const goToDate = async (targetDate: Date): Promise<string> => {
         // Note: We use targetDate, not 'now'
         const previousDate = new Date(targetDate);
         previousDate.setDate(previousDate.getDate() - 1);
-        const yInfo = formatDate(previousDate);
+        const yInfo = formatDateForJournal(previousDate);
         const previousNote = await findNoteByTitle(yInfo.full);
         
         if (previousNote) {
@@ -90,7 +77,7 @@ export const goToDate = async (targetDate: Date): Promise<string> => {
         for (let i = 1; i <= 5; i++) {
             const pastDate = new Date(targetDate);
             pastDate.setFullYear(pastDate.getFullYear() - i);
-            const pInfo = formatDate(pastDate);
+            const pInfo = formatDateForJournal(pastDate);
             const pastNote = await findNoteByTitle(pInfo.full);
             
             if (pastNote) {

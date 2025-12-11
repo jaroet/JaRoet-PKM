@@ -3,6 +3,12 @@
 
 All notable changes to the JaRoet PKM project will be documented in this file.
 
+## [0.3.6] - 2024-05-23
+
+### Refactor
+- **Codebase Clean-up**: Centralized logic for Markdown rendering and Date handling into shared services. This eliminates code duplication between the main view and the editor, ensuring consistent link styling and behavior.
+- **Standalone Build**: Updated the monolithic release build to include the new shared architecture.
+
 ## [0.3.5] - 2024-05-23
 
 ### Features
@@ -47,7 +53,7 @@ All notable changes to the JaRoet PKM project will be documented in this file.
 - **Internal WikiLinks:** Added support for `[[Note Title]]` syntax in the editor. Includes an intelligent autocomplete popup and instant navigation when clicking links in both Edit and View modes.
 - **Import/Export:** 
     - Added JSON export and import capabilities.
-    - **Merge Import:** Smartly merges imported notes into existing vaults, handling name collisions by renaming (`Note (1)`) and linking them to an audit parent.
+    - **Merge Import:** Smartly merges imported notes into existing vaults, handling name collisions by renaming (`Note (1)`) and linking to an audit parent.
     - **Obsidian Converter:** Included a standalone HTML tool to convert Obsidian vaults into a JaRoet-compatible JSON import file.
 - **UI Customization:** Added "General" settings to toggle the visibility of the "Favorites" and "Content" sections. The layout dynamically expands adjacent sections to fill the space.
 
