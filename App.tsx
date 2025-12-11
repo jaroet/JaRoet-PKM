@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from
 import { marked } from 'marked';
 import { db, getTopology, createNote, updateNote, deleteNote, getFavorites, toggleFavorite, seedDatabase, getNote, getAllNotes, importNotes, getHomeNoteId, searchNotes, getFontSize, getNoteCount, getVaultList, getCurrentVaultName, switchVault, getAppTheme, AppTheme, getSectionVisibility, findNoteByTitle, getNoteTitlesByPrefix } from './services/db';
 import { goToToday, goToDate } from './services/journal';
+import { useHistory } from './hooks/useHistory';
 import { Note, Section, Topology, SearchResult } from './types';
 import NoteCard from './components/NoteCard';
 import LinkerModal from './components/LinkerModal';
@@ -161,8 +162,10 @@ const NoteSection: React.FC<NoteSectionProps> = ({
 };
 
 function App() {
+  // --- Navigation History Hook ---
+  const { currentId: centralNoteId, visit, replace, back, forward, canBack, canForward } = useHistory();
+
   // --- State ---
-  const [centralNoteId, setCentralNoteId] = useState<string | null>(null);
   const [topology, setTopology] = useState<Topology>({
     center: null,
     uppers: [],
@@ -240,7 +243,8 @@ function App() {
       // DB
       const seededId = await seedDatabase();
       const lastId = await db.meta.get('currentCentralNoteId');
-      setCentralNoteId(lastId ? lastId.value : seededId);
+      // Initialize History with the starting note
+      replace(lastId ? lastId.value : seededId);
       
       // Font Size
       const fs = await getFontSize();
@@ -484,13 +488,13 @@ function App() {
 
   const handleJournalToday = async () => {
       const todayId = await goToToday();
-      setCentralNoteId(todayId);
+      visit(todayId);
   };
   
   const handleCalendarSelect = async (date: Date) => {
       setCalendarOpen(false);
       const noteId = await goToDate(date);
-      setCentralNoteId(noteId);
+      visit(noteId);
   };
 
   const handleCalendarMonthChange = async (year: number, month: number) => {
@@ -530,18 +534,14 @@ function App() {
       const targetNote = await findNoteByTitle(title);
       
       if (targetNote) {
-          // 2. Set Central Note
-          setCentralNoteId(targetNote.id);
+          // 2. Set Central Note using History
+          visit(targetNote.id);
           
           // 3. Smart View Switch
-          // If we are currently in the Editor, and the target has content -> Keep Editor Open (refresh content)
-          // If target is empty -> Close Editor, focus canvas
           if (editorOpen) {
               if (targetNote.content && targetNote.content.trim().length > 0) {
                   // Keep editor open, just refresh content (handled by useEffect on note prop)
-                  // We need to ensure focus updates if we navigated to a new center
               } else {
-                  // Target empty, close editor to show context
                   setEditorOpen(false);
               }
           }
@@ -567,22 +567,22 @@ function App() {
     if (homeId) {
         const exists = await getNote(homeId);
         if (exists) {
-            setCentralNoteId(homeId);
+            visit(homeId);
         } else {
             // Home note deleted? Fallback
             const all = await getAllNotes();
             if (all.length > 0) {
-                setCentralNoteId(all[0].id);
+                visit(all[0].id);
             } else {
                 const newId = await seedDatabase();
-                if (newId) setCentralNoteId(newId);
+                if (newId) visit(newId);
             }
         }
     } else {
         // No home set, open settings
         setSettingsOpen(true);
     }
-  }, []);
+  }, [visit]);
 
   const performDelete = useCallback(async (note: Note) => {
         await deleteNote(note.id);
@@ -788,7 +788,7 @@ function App() {
   };
 
   const handleSearchSelect = (id: string) => {
-    setCentralNoteId(id);
+    visit(id);
     setIsSearchActive(false);
     setSearchQuery('');
   };
@@ -891,6 +891,18 @@ function App() {
     }
 
     if (renameModalOpen || isSearchActive || editorOpen || linkerOpen || settingsOpen || importModalOpen) return;
+
+    // History Navigation (Alt + Arrows)
+    if (e.altKey && e.key === 'ArrowLeft') {
+        e.preventDefault();
+        back();
+        return;
+    }
+    if (e.altKey && e.key === 'ArrowRight') {
+        e.preventDefault();
+        forward();
+        return;
+    }
 
     // Search
     if (e.key === '/') {
@@ -1013,7 +1025,7 @@ function App() {
         e.preventDefault();
         const note = getFocusedNote();
         if (note && note.id !== centralNoteId) {
-            setCentralNoteId(note.id);
+            visit(note.id);
         }
         return;
     }
@@ -1268,7 +1280,7 @@ function App() {
         } 
     }
 
-  }, [focusedSection, focusedIndex, topology, favorites, centralNoteId, renameModalOpen, isSearchActive, editorOpen, linkerOpen, settingsOpen, fontSize, sectionIndices, getFocusedNote, getSortedNotes, showFavDropdown, showMainMenu, selectedNoteIds, showFavorites, showContent, handleDeleteAction, importModalOpen, calendarOpen]);
+  }, [focusedSection, focusedIndex, topology, favorites, centralNoteId, renameModalOpen, isSearchActive, editorOpen, linkerOpen, settingsOpen, fontSize, sectionIndices, getFocusedNote, getSortedNotes, showFavDropdown, showMainMenu, selectedNoteIds, showFavorites, showContent, handleDeleteAction, importModalOpen, calendarOpen, back, forward]);
 
   // Robust Event Listener Attachment
   const handleKeyDownRef = useRef(handleGlobalKeyDown);
@@ -1418,6 +1430,28 @@ function App() {
             )}
         </div>
 
+        {/* Navigation History */}
+        <div className="flex items-center gap-0.5">
+            <button
+                onClick={() => back()}
+                disabled={!canBack}
+                title="Back (Alt + Left)"
+                className={`p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${!canBack ? 'opacity-30 cursor-not-allowed' : ''}`}
+                style={{ color: 'var(--theme-accent)' }}
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            </button>
+            <button
+                onClick={() => forward()}
+                disabled={!canForward}
+                title="Forward (Alt + Right)"
+                className={`p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${!canForward ? 'opacity-30 cursor-not-allowed' : ''}`}
+                style={{ color: 'var(--theme-accent)' }}
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </button>
+        </div>
+
         <button 
             onClick={goHome} 
             title="Go Home" 
@@ -1475,7 +1509,7 @@ function App() {
                             key={fav.id}
                             className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer text-sm truncate"
                             onClick={() => {
-                                setCentralNoteId(fav.id);
+                                visit(fav.id);
                                 setShowFavDropdown(false);
                             }}
                         >
@@ -1661,7 +1695,7 @@ function App() {
                         if (isCtrl) {
                             handleToggleSelection(id);
                         } else {
-                            if (id !== centralNoteId) setCentralNoteId(id);
+                            if (id !== centralNoteId) visit(id);
                         }
                     }}
                     scrollPositionsRef={scrollPositionsRef}
@@ -1687,7 +1721,7 @@ function App() {
                             if (isCtrl) {
                                 handleToggleSelection(id);
                             } else {
-                                if (id !== centralNoteId) setCentralNoteId(id);
+                                if (id !== centralNoteId) visit(id);
                             }
                         }}
                         scrollPositionsRef={scrollPositionsRef}
@@ -1721,7 +1755,7 @@ function App() {
                                 if (isCtrl) {
                                     handleToggleSelection(id);
                                 } else {
-                                    if (id !== centralNoteId) setCentralNoteId(id);
+                                    if (id !== centralNoteId) visit(id);
                                 }
                             }}
                             scrollPositionsRef={scrollPositionsRef}
@@ -1775,7 +1809,7 @@ function App() {
                             if (isCtrl) {
                                 handleToggleSelection(id);
                             } else {
-                                if (id !== centralNoteId) setCentralNoteId(id);
+                                if (id !== centralNoteId) visit(id);
                             }
                         }}
                         scrollPositionsRef={scrollPositionsRef}
@@ -1805,7 +1839,7 @@ function App() {
                         if (isCtrl) {
                             handleToggleSelection(id);
                         } else {
-                            if (id !== centralNoteId) setCentralNoteId(id);
+                            if (id !== centralNoteId) visit(id);
                         }
                     }}
                     scrollPositionsRef={scrollPositionsRef}
@@ -1835,7 +1869,7 @@ function App() {
 {/* --- Footer / Status Bar --- */}
 <div style={{ fontSize: `${uiFontSize}px` }} className="h-8 flex-shrink-0 bg-[var(--theme-bars)] flex items-center justify-between px-4 text-foreground z-50 transition-colors duration-300">
     <div className="flex-shrink-0 opacity-90">
-        Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.3.4
+        Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.3.5
     </div>
     <div className="opacity-60 truncate ml-4 text-right">
         Arrows: Nav | Space: Open | Enter: Center Focus | Shift+Enter: Edit | Ctrl+Arrows: Link | F2: Rename | Bksp: Unlink

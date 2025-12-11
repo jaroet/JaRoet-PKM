@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -38,7 +39,7 @@
       };
     </script>
     
-    <!-- Tailwind CSS (via CDN) -->
+    <!-- Tailwind CSS (via CDN - JIT Compiler) -->
     <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
     <script>
       tailwind.config = {
@@ -116,7 +117,7 @@
       }
     </style>
     
-    <!-- Libraries (Production Versions) -->
+    <!-- Libraries (Production Minified Versions) -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.min.js"></script>
@@ -134,15 +135,15 @@
         // --- Configure Marked for External Links (Global) ---
         const renderer = new marked.Renderer();
         const originalLink = renderer.link;
-        renderer.link = function(href, title, text) {
-            let linkHref = href || '';
+        renderer.link = function(hrefOrObj, title, text) {
+            let linkHref = hrefOrObj || '';
             let linkTitle = title || '';
             let linkText = text || '';
 
-            if (typeof href === 'object') {
-                linkHref = href.href;
-                linkTitle = href.title;
-                linkText = href.text;
+            if (typeof hrefOrObj === 'object') {
+                linkHref = hrefOrObj.href;
+                linkTitle = hrefOrObj.title;
+                linkText = hrefOrObj.text;
             }
 
             const isExternal = linkHref && (linkHref.startsWith('http') || linkHref.startsWith('//'));
@@ -314,6 +315,11 @@
         
         const findNoteByTitle = async (title) => {
             return await db.notes.where('title').equalsIgnoreCase(title).first();
+        };
+
+        const getNoteTitlesByPrefix = async (prefix) => {
+            const notes = await db.notes.where('title').startsWith(prefix).toArray();
+            return notes.map(n => n.title);
         };
 
         const createNote = async (title) => {
@@ -578,7 +584,7 @@
             }
         };
 
-        // --- 2b. Journal Service ---
+        // --- Journal Service ---
         
         const formatDate = (d) => {
             const yyyy = d.getFullYear();
@@ -593,9 +599,8 @@
             };
         };
 
-        const goToToday = async () => {
-            const now = new Date();
-            const dateInfo = formatDate(now);
+        const goToDate = async (targetDate) => {
+            const dateInfo = formatDate(targetDate);
             
             // 1. Ensure Hub
             let hub = await findNoteByTitle('Journal Hub');
@@ -638,28 +643,28 @@
                     await updateNote(monthNote.id, { linksTo: [...freshMonth.linksTo, dayNote.id] });
                 }
 
-                // 5. Link Yesterday
-                const yesterdayDate = new Date(now);
-                yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-                const yInfo = formatDate(yesterdayDate);
-                const yesterdayNote = await findNoteByTitle(yInfo.full);
+                // 5. Link Previous Day
+                const previousDate = new Date(targetDate);
+                previousDate.setDate(previousDate.getDate() - 1);
+                const yInfo = formatDate(previousDate);
+                const previousNote = await findNoteByTitle(yInfo.full);
                 
-                if (yesterdayNote) {
+                if (previousNote) {
                     const freshDay = await getNote(dayNote.id);
-                    const freshYesterday = await getNote(yesterdayNote.id);
-                    if (freshDay && freshYesterday) {
-                        if (!freshDay.relatedTo.includes(yesterdayNote.id)) {
-                            await updateNote(freshDay.id, { relatedTo: [...freshDay.relatedTo, yesterdayNote.id] });
+                    const freshPrevious = await getNote(previousNote.id);
+                    if (freshDay && freshPrevious) {
+                        if (!freshDay.relatedTo.includes(previousNote.id)) {
+                            await updateNote(freshDay.id, { relatedTo: [...freshDay.relatedTo, previousNote.id] });
                         }
-                        if (!freshYesterday.relatedTo.includes(freshDay.id)) {
-                            await updateNote(freshYesterday.id, { relatedTo: [...freshYesterday.relatedTo, freshDay.id] });
+                        if (!freshPrevious.relatedTo.includes(freshDay.id)) {
+                            await updateNote(freshPrevious.id, { relatedTo: [...freshPrevious.relatedTo, freshDay.id] });
                         }
                     }
                 }
 
                 // 6. Link Past Years
                 for (let i = 1; i <= 5; i++) {
-                    const pastDate = new Date(now);
+                    const pastDate = new Date(targetDate);
                     pastDate.setFullYear(pastDate.getFullYear() - i);
                     const pInfo = formatDate(pastDate);
                     const pastNote = await findNoteByTitle(pInfo.full);
@@ -681,8 +686,68 @@
             return dayNote.id;
         };
 
+        const goToToday = async () => {
+            return goToDate(new Date());
+        };
 
-        // --- 3. Components ---
+        // --- Custom Hook: useHistory ---
+        const MAX_HISTORY = 50;
+
+        function useHistory(initialId = null) {
+            const [history, setHistory] = useState(initialId ? [initialId] : []);
+            const [index, setIndex] = useState(initialId ? 0 : -1);
+
+            const currentId = index >= 0 && index < history.length ? history[index] : null;
+
+            const visit = useCallback((id) => {
+                setHistory(prev => {
+                    if (prev[index] === id) return prev;
+                    const newHistory = prev.slice(0, index + 1);
+                    newHistory.push(id);
+                    if (newHistory.length > MAX_HISTORY) {
+                        newHistory.shift();
+                    }
+                    return newHistory;
+                });
+
+                setIndex(prev => {
+                    const estimatedLength = index + 2;
+                    if (estimatedLength > MAX_HISTORY) {
+                        return MAX_HISTORY - 1;
+                    }
+                    return index + 1;
+                });
+            }, [index]);
+
+            const replace = useCallback((id) => {
+                setHistory([id]);
+                setIndex(0);
+            }, []);
+
+            const back = useCallback(() => {
+                if (index > 0) {
+                    setIndex(prev => prev - 1);
+                }
+            }, [index]);
+
+            const forward = useCallback(() => {
+                if (index < history.length - 1) {
+                    setIndex(prev => prev + 1);
+                }
+            }, [index, history.length]);
+
+            return {
+                currentId,
+                visit,
+                replace,
+                back,
+                forward,
+                canBack: index > 0,
+                canForward: index < history.length - 1
+            };
+        }
+
+        // --- Components ---
 
         // -- NoteCard --
         const NoteCard = ({ note, isFocused, isSelected, isCenter, fontSize, onClick, className, id, subtitle }) => {
@@ -761,7 +826,7 @@
             );
         };
 
-        // -- NoteSection Component (Fix for React Error #300) --
+        // -- NoteSection --
         const NoteSection = ({ 
             notes, section, containerClasses, itemClasses, containerId, 
             fontSize, focusedSection, focusedIndex, selectedNoteIds, centralNoteId, 
@@ -769,7 +834,6 @@
         }) => {
             const sortedNotes = [...notes].sort((a, b) => a.title.localeCompare(b.title));
             
-            // Restore scroll
             useLayoutEffect(() => {
                 const el = document.getElementById(containerId);
                 if (el) {
@@ -798,6 +862,118 @@
                             className={itemClasses}
                         />
                     ))}
+                </div>
+            );
+        };
+
+        // -- CalendarDropdown --
+        const CalendarDropdown = ({ isOpen, onClose, onSelectDate, existingDates, onMonthChange }) => {
+            const [viewDate, setViewDate] = useState(new Date());
+
+            useEffect(() => {
+                if (isOpen) {
+                    setViewDate(new Date());
+                    onMonthChange(new Date().getFullYear(), new Date().getMonth() + 1);
+                }
+            }, [isOpen]);
+
+            const handlePrevMonth = (e) => {
+                e.stopPropagation();
+                const prev = new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1);
+                setViewDate(prev);
+                onMonthChange(prev.getFullYear(), prev.getMonth() + 1);
+            };
+
+            const handleNextMonth = (e) => {
+                e.stopPropagation();
+                const next = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1);
+                setViewDate(next);
+                onMonthChange(next.getFullYear(), next.getMonth() + 1);
+            };
+
+            const handleDayClick = (day) => {
+                const target = new Date(viewDate.getFullYear(), viewDate.getMonth(), day);
+                onSelectDate(target);
+            };
+
+            const getDaysInMonth = (date) => {
+                const year = date.getFullYear();
+                const month = date.getMonth();
+                return new Date(year, month + 1, 0).getDate();
+            };
+
+            const getFirstDayOfMonth = (date) => {
+                const day = new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+                return (day + 6) % 7;
+            };
+
+            if (!isOpen) return null;
+
+            const daysInMonth = getDaysInMonth(viewDate);
+            const startDay = getFirstDayOfMonth(viewDate);
+            const days = [];
+            
+            for (let i = 0; i < startDay; i++) {
+                days.push(<div key={`empty-${i}`} className="h-9"></div>);
+            }
+
+            const today = new Date();
+            const isCurrentMonth = today.getFullYear() === viewDate.getFullYear() && today.getMonth() === viewDate.getMonth();
+
+            for (let d = 1; d <= daysInMonth; d++) {
+                const dateStr = `${viewDate.getFullYear()}-${String(viewDate.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                const hasEntry = existingDates.has(dateStr);
+                const isToday = isCurrentMonth && d === today.getDate();
+
+                days.push(
+                    <div 
+                        key={d}
+                        onClick={() => handleDayClick(d)}
+                        className={`
+                            h-9 w-9 flex items-center justify-center rounded-lg cursor-pointer text-sm relative transition-all group
+                            ${isToday 
+                                ? 'text-primary font-extrabold text-base' 
+                                : 'text-foreground font-medium hover:bg-gray-100 dark:hover:bg-gray-800'
+                            }
+                        `}
+                    >
+                        <span className="z-10">{d}</span>
+                        {hasEntry && (
+                            <div className="absolute bottom-1 w-5 h-0.5 rounded-full bg-primary"></div>
+                        )}
+                    </div>
+                );
+            }
+
+            const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+            return (
+                <div className="absolute top-full left-0 mt-2 w-72 bg-card text-foreground border border-gray-200 dark:border-gray-700 shadow-xl rounded-lg z-50 p-4" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex justify-between items-center mb-4">
+                        <button onClick={handlePrevMonth} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                        </button>
+                        <span className="font-bold">
+                            {monthNames[viewDate.getMonth()]} {viewDate.getFullYear()}
+                        </span>
+                        <button onClick={handleNextMonth} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                        </button>
+                    </div>
+                    <div className="grid grid-cols-7 mb-2 text-center text-xs text-gray-500 font-semibold">
+                        <div>Mo</div><div>Tu</div><div>We</div><div>Th</div><div>Fr</div><div>Sa</div><div>Su</div>
+                    </div>
+                    <div className="grid grid-cols-7 gap-1 text-center">
+                        {days}
+                    </div>
+                     <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 text-center">
+                        <button 
+                            className="text-xs text-primary hover:underline"
+                            onClick={() => onSelectDate(new Date())}
+                        >
+                            Jump to Today
+                        </button>
+                     </div>
                 </div>
             );
         };
@@ -1067,7 +1243,7 @@
                           const len = el.value.length;
                           el.setSelectionRange(len, len);
                           el.scrollTop = el.scrollHeight;
-              }
+                      }
                   }
               }, 100);
             }
@@ -1077,7 +1253,6 @@
           useEffect(() => {
             const parse = async () => {
                 try {
-                    // Explicitly pass renderer to override any global config that disables checkboxes
                     const html = await marked.parse(content || '', { 
                         breaks: true, 
                         gfm: true,
@@ -1093,6 +1268,7 @@
             return () => clearTimeout(timeout);
           }, [content]);
 
+          // Search Notes for Autocomplete
           useEffect(() => {
             if (showSuggestions) {
                 const fetch = async () => {
@@ -1128,6 +1304,7 @@
 
           const handlePreviewClick = (e) => {
               const target = e.target;
+              
               if (target.tagName === 'INPUT' && target.type === 'checkbox') {
                    const checkboxes = previewRef.current?.querySelectorAll('input[type="checkbox"]');
                    if (checkboxes) {
@@ -1138,6 +1315,7 @@
                    }
                    return;
               }
+
               if (target.classList.contains('internal-link')) {
                   e.preventDefault();
                   const title = target.getAttribute('data-title');
@@ -1210,7 +1388,7 @@
           };
 
           const handleKeyDown = (e) => {
-            e.stopPropagation(); 
+            e.stopPropagation();
 
             if (showSuggestions && suggestions.length > 0) {
                 if (e.key === 'ArrowDown') {
@@ -1244,7 +1422,6 @@
               return;
             }
             
-            // Ctrl+Enter
             if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 if (isPreview) {
@@ -1255,13 +1432,12 @@
                 return;
             }
 
-            // Shift+Enter
             if (e.shiftKey && e.key === 'Enter' && !e.ctrlKey && !e.metaKey) {
                 e.preventDefault();
                 if (isPreview) {
                     onClose();
                 } else {
-                    switchToView();
+                     switchToView();
                 }
                 return;
             }
@@ -1328,6 +1504,7 @@
                                 className="w-full h-full p-6 bg-transparent resize-none outline-none font-mono custom-scrollbar"
                                 placeholder="Type markdown here... Use [[ to link."
                             />
+                            
                             {showSuggestions && (
                                 <div 
                                     className="absolute z-50 w-64 bg-card border border-gray-200 dark:border-gray-700 shadow-xl rounded-md max-h-60 overflow-y-auto"
@@ -1457,10 +1634,11 @@
               setSearchResults([]);
               setLocalFontSize(fontSize);
               setCurrentVault(getCurrentVaultName());
+              
               setConfirmDelete(false);
               setConfirmReset(false);
               setNewVaultName('');
-              setActiveTab('general');
+              setActiveTab('general'); 
             }
           }, [isOpen, fontSize]);
 
@@ -1535,6 +1713,7 @@
           const handleVisibilityChange = async (key, val) => {
               if (key === 'showFavorites') setShowFavorites(val);
               if (key === 'showContent') setShowContent(val);
+              
               await setSectionVisibility(key, val);
               onSettingsChange();
           };
@@ -1620,7 +1799,7 @@
                                         value={localFontSize}
                                         onChange={handleFontSizeChange}
                                         className="flex-1 accent-primary"
-                            />
+                                    />
                                 </div>
                                 <p className="text-xs text-gray-400 mt-2">Affects note lists. Central note is 150% of this size.</p>
                             </div>
@@ -1840,29 +2019,11 @@
           );
         };
 
-        // --- 4. Mount ---
-
-        const compactMarkdownStyles = `
-          .compact-markdown ul, .compact-markdown ol {
-              margin-top: 0.25em !important;
-              margin-bottom: 0.25em !important;
-          }
-          .compact-markdown li {
-              margin-top: 0 !important;
-              margin-bottom: 0 !important;
-          }
-          .compact-markdown li > p {
-              margin-top: 0 !important;
-              margin-bottom: 0 !important;
-          }
-          .compact-markdown li.task-list-item {
-              list-style-type: none;
-              padding-left: 0;
-  }
-        `;
+        // --- App ---
 
         function App() {
-          const [centralNoteId, setCentralNoteId] = useState(null);
+          const { currentId: centralNoteId, visit, replace, back, forward, canBack, canForward } = useHistory();
+
           const [topology, setTopology] = useState({
             center: null,
             uppers: [],
@@ -1882,8 +2043,7 @@
           const [focusedSection, setFocusedSection] = useState('center');
           const [focusedIndex, setFocusedIndex] = useState(0);
           const [sectionIndices, setSectionIndices] = useState({ up: 0, down: 0, left: 0, right: 0, favs: 0 });
-          
-          // Scroll persistence per section
+
           const scrollPositionsRef = useRef({});
 
           const [selectedNoteIds, setSelectedNoteIds] = useState(new Set());
@@ -1897,6 +2057,9 @@
           const [activeSearchIndex, setActiveSearchIndex] = useState(0); 
           const [isSearchActive, setIsSearchActive] = useState(false);
           
+          const [calendarOpen, setCalendarOpen] = useState(false);
+          const [existingJournalDates, setExistingJournalDates] = useState(new Set());
+
           const [editorOpen, setEditorOpen] = useState(false);
           const [editorMode, setEditorMode] = useState('view');
           
@@ -1907,10 +2070,10 @@
           const [noteToRename, setNoteToRename] = useState(null);
 
           const [settingsOpen, setSettingsOpen] = useState(false);
-
+          
           const [importModalOpen, setImportModalOpen] = useState(false);
           const [pendingImportData, setPendingImportData] = useState([]);
-          
+
           const [previewHtml, setPreviewHtml] = useState('');
           
           const searchInputRef = useRef(null);
@@ -1922,7 +2085,7 @@
             const init = async () => {
               const seededId = await seedDatabase();
               const lastId = await db.meta.get('currentCentralNoteId');
-              setCentralNoteId(lastId ? lastId.value : seededId);
+              replace(lastId ? lastId.value : seededId);
               
               const fs = await getFontSize();
               setFontSize(fs);
@@ -2001,7 +2164,6 @@
               setFocusedIndex(0);
               setSectionIndices({ up: 0, down: 0, left: 0, right: 0, favs: 0 });
               setSelectedNoteIds(new Set());
-              // Reset scroll on navigation
               scrollPositionsRef.current = {};
               updateTotalCount();
             }
@@ -2033,7 +2195,7 @@
                 if (searchQuery.trim()) {
                     const results = await searchNotes(searchQuery);
                     setSearchResults(results);
-                    setActiveSearchIndex(0);
+                    setActiveSearchIndex(0); 
                 } else {
                     setSearchResults([]);
                     setActiveSearchIndex(0);
@@ -2107,7 +2269,6 @@
 
 
           useEffect(() => {
-            // Safety check if hidden sections are focused
             if (focusedSection === 'favs' && !showFavorites) {
                 setFocusedSection('left');
                 setFocusedIndex(0);
@@ -2142,9 +2303,21 @@
             }
           };
 
-          const handleJournal = async () => {
+          const handleJournalToday = async () => {
               const todayId = await goToToday();
-              setCentralNoteId(todayId);
+              visit(todayId);
+          };
+          
+          const handleCalendarSelect = async (date) => {
+              setCalendarOpen(false);
+              const noteId = await goToDate(date);
+              visit(noteId);
+          };
+
+          const handleCalendarMonthChange = async (year, month) => {
+              const prefix = `${year}-${String(month).padStart(2, '0')}-`;
+              const matchingTitles = await getNoteTitlesByPrefix(prefix);
+              setExistingJournalDates(new Set(matchingTitles));
           };
 
           const handleRename = async (newTitle) => {
@@ -2174,11 +2347,11 @@
 
           const handleInternalLinkClick = async (title) => {
               const targetNote = await findNoteByTitle(title);
+              
               if (targetNote) {
-                  setCentralNoteId(targetNote.id);
+                  visit(targetNote.id);
                   if (editorOpen) {
                       if (targetNote.content && targetNote.content.trim().length > 0) {
-                          // refresh content
                       } else {
                           setEditorOpen(false);
                       }
@@ -2204,20 +2377,20 @@
             if (homeId) {
                 const exists = await getNote(homeId);
                 if (exists) {
-                    setCentralNoteId(homeId);
+                    visit(homeId);
                 } else {
                     const all = await getAllNotes();
                     if (all.length > 0) {
-                        setCentralNoteId(all[0].id);
+                        visit(all[0].id);
                     } else {
                         const newId = await seedDatabase();
-                        if (newId) setCentralNoteId(newId);
+                        if (newId) visit(newId);
                     }
                 }
             } else {
                 setSettingsOpen(true);
             }
-          }, []);
+          }, [visit]);
 
           const performDelete = useCallback(async (note) => {
                 await deleteNote(note.id);
@@ -2364,6 +2537,7 @@
             
             const linkToTarget = async (id) => {
                 await cleanRelationships(anchorId, id);
+                
                 if (linkerType === 'up') {
                     const target = await getNote(id);
                     if (target) await updateNote(id, { linksTo: [...target.linksTo, anchorId] });
@@ -2407,7 +2581,7 @@
           };
 
           const handleSearchSelect = (id) => {
-            setCentralNoteId(id);
+            visit(id);
             setIsSearchActive(false);
             setSearchQuery('');
           };
@@ -2442,8 +2616,10 @@
                         const text = event.target?.result;
                         if (!text) throw new Error("Empty file");
                         const notes = JSON.parse(text);
+                        
                         setPendingImportData(notes);
                         setImportModalOpen(true);
+                        
                         document.body.removeChild(input);
                     } catch (err) {
                         console.error(err);
@@ -2476,6 +2652,10 @@
           const handleGlobalKeyDown = useCallback(async (e) => {
             if (e.key === 'Escape') {
                 let closed = false;
+                if (calendarOpen) {
+                    setCalendarOpen(false);
+                    closed = true;
+                }
                 if (showFavDropdown) {
                     setShowFavDropdown(false);
                     closed = true;
@@ -2500,6 +2680,18 @@
 
             if (renameModalOpen || isSearchActive || editorOpen || linkerOpen || settingsOpen || importModalOpen) return;
 
+            // History Navigation (Alt + Arrows)
+            if (e.altKey && e.key === 'ArrowLeft') {
+                e.preventDefault();
+                back();
+                return;
+            }
+            if (e.altKey && e.key === 'ArrowRight') {
+                e.preventDefault();
+                forward();
+                return;
+            }
+
             if (e.key === '/') {
               e.preventDefault();
               setIsSearchActive(true);
@@ -2507,10 +2699,9 @@
               return;
             }
             
-            // Journal Mode (Ctrl+J)
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') {
                 e.preventDefault();
-                handleJournal();
+                handleJournalToday();
                 return;
             }
 
@@ -2519,7 +2710,6 @@
                 const note = getFocusedNote();
                 if (note && note.id !== centralNoteId) {
                     handleToggleSelection(note.id);
-                    // Automatically move to the next note for rapid selection
                     const notes = getSortedNotes(focusedSection);
                     if (focusedIndex < notes.length - 1) {
                         setFocusedIndex(prev => prev + 1);
@@ -2537,9 +2727,9 @@
             if (e.key === 'Backspace') {
               e.preventDefault();
               if (selectedNoteIdsRef.current.size > 0) {
-          await changeRelationship('unlink');
-          return;
-      }
+                  await changeRelationship('unlink');
+                  return;
+              }
               const note = getFocusedNote();
               if (note && centralNoteId && focusedSection !== 'center' && focusedSection !== 'right' && focusedSection !== 'favs' && focusedSection !== 'content') {
                 await changeRelationship('unlink');
@@ -2587,33 +2777,29 @@
                 return;
             }
 
-            // Shift+Enter
             if (e.shiftKey && e.key === 'Enter') {
                 e.preventDefault();
                 handleOpenEditor('view');
                 return;
             }
 
-            // Ctrl+Enter: Open Editor in Edit Mode
             if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 handleOpenEditor('edit');
                 return;
             }
 
-            // Enter = Focus Center
             if (e.key === 'Enter') { 
                 e.preventDefault();
                 setFocusedSection('center');
                 return;
             }
 
-            // Space = Open Note
             if (e.key === ' ') {
                 e.preventDefault();
                 const note = getFocusedNote();
                 if (note && note.id !== centralNoteId) {
-                    setCentralNoteId(note.id);
+                    visit(note.id);
                 }
                 return;
             }
@@ -2621,9 +2807,12 @@
             const getItemsPerColumn = (sectionId) => {
                 const container = document.getElementById(sectionId);
                 if (!container) return 1;
+                
                 const cards = Array.from(container.children).filter(c => c.id.startsWith('note-'));
                 if (cards.length < 2) return 1;
+                
                 const firstLeft = (cards[0]).offsetLeft;
+                
                 for (let i = 1; i < cards.length; i++) {
                     const currentLeft = (cards[i]).offsetLeft;
                     if (currentLeft > firstLeft + 20) {
@@ -2635,13 +2824,16 @@
 
             if (e.key === 'ArrowUp') {
                 e.preventDefault();
+                
                 if (e.shiftKey && ['up', 'down', 'left', 'right', 'favs'].includes(focusedSection)) {
                      const notes = getSortedNotes(focusedSection);
                      if (notes.length === 0) return;
+                     
                      if (selectedNoteIds.size === 0) {
                          const current = notes[focusedIndex];
                          if (current) handleToggleSelection(current.id);
                      }
+                     
                      if (focusedIndex > 0) {
                          const newIndex = focusedIndex - 1;
                          setFocusedIndex(newIndex);
@@ -2688,13 +2880,16 @@
                 }
             } else if (e.key === 'ArrowDown') {
                 e.preventDefault();
+                
                 if (e.shiftKey && ['up', 'down', 'left', 'right', 'favs'].includes(focusedSection)) {
                      const notes = getSortedNotes(focusedSection);
                      if (notes.length === 0) return;
+                     
                      if (selectedNoteIds.size === 0) {
                          const current = notes[focusedIndex];
                          if (current) handleToggleSelection(current.id);
                      }
+                     
                      if (focusedIndex < notes.length - 1) {
                          const newIndex = focusedIndex + 1;
                          setFocusedIndex(newIndex);
@@ -2709,148 +2904,150 @@
                      }
                      return;
                 }
+
                 if (focusedSection === 'content') return;
+                
                 if (focusedSection === 'center') {
                      if (topology.downers.length > 0) {
-                setFocusedSection('down');
-                const target = Math.min(sectionIndices.down, topology.downers.length - 1);
-                setFocusedIndex(target);
-             }
-        } else if (focusedSection === 'up') {
-            const arr = topology.uppers;
-            if (focusedIndex === arr.length - 1) {
-                setFocusedSection('center');
-            } else {
-                 setFocusedIndex(prev => Math.min(arr.length - 1, prev + 1));
+                        setFocusedSection('down');
+                        const target = Math.min(sectionIndices.down, topology.downers.length - 1);
+                        setFocusedIndex(target);
+                     }
+                } else if (focusedSection === 'up') {
+                    const arr = topology.uppers;
+                    if (focusedIndex === arr.length - 1) {
+                        setFocusedSection('center');
+                    } else {
+                         setFocusedIndex(prev => Math.min(arr.length - 1, prev + 1));
+                    }
+                } else if (focusedSection === 'left') {
+                     const arr = topology.lefters;
+                     if (focusedIndex === arr.length - 1) {
+                         if (showFavorites && favorites.length > 0) {
+                            setFocusedSection('favs');
+                            setFocusedIndex(Math.min(sectionIndices.favs, favorites.length - 1));
+                         }
+                     } else {
+                         setFocusedIndex(prev => Math.min(arr.length - 1, prev + 1));
+                     }
+                } else if (focusedSection === 'right') {
+                     const arr = topology.righters;
+                     if (focusedIndex === arr.length - 1) {
+                         if (showContent) {
+                             setFocusedSection('content');
+                          }
+                     } else {
+                         setFocusedIndex(prev => Math.min(arr.length - 1, prev + 1));
+                     }
+                } else {
+                    const arr = getSortedNotes(focusedSection);
+                    setFocusedIndex(prev => Math.min(arr.length - 1, prev + 1));
+                }
+            } else if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                
+                if (['up', 'down', 'left', 'right', 'favs'].includes(focusedSection)) {
+                     const containerId = `container-${focusedSection}`;
+                     const itemsPerCol = getItemsPerColumn(containerId);
+                     
+                     const newIndex = focusedIndex - itemsPerCol;
+                     
+                     if (newIndex >= 0) {
+                         setFocusedIndex(newIndex);
+                         return; 
+                     }
+                }
+
+                if (focusedSection === 'content') {
+                     setFocusedSection('down');
+                     setFocusedIndex(Math.min(sectionIndices.down, topology.downers.length - 1));
+                     return;
+                }
+
+                if (focusedSection === 'center') {
+                    if (topology.lefters.length > 0) {
+                        setFocusedSection('left');
+                        const target = Math.min(sectionIndices.left, topology.lefters.length - 1);
+                        setFocusedIndex(target);
+                    } else if (showFavorites && favorites.length > 0) {
+                         setFocusedSection('favs');
+                         const target = Math.min(sectionIndices.favs, favorites.length - 1);
+                         setFocusedIndex(target);
+                    }
+                } else if (focusedSection === 'right') {
+                     setFocusedSection('up');
+                     setFocusedIndex(Math.min(sectionIndices.up, topology.uppers.length - 1));
+                } else if (focusedSection === 'down') {
+                     if (showFavorites && favorites.length > 0) {
+                         setFocusedSection('favs');
+                         setFocusedIndex(Math.min(sectionIndices.favs, favorites.length - 1));
+                     } else {
+                         setFocusedSection('left');
+                         setFocusedIndex(Math.min(sectionIndices.left, topology.lefters.length - 1));
+                     }
+                } else if (focusedSection === 'up') {
+                    setFocusedSection('left');
+                    setFocusedIndex(Math.min(sectionIndices.left, topology.lefters.length - 1));
+                }
+            } else if (e.key === 'ArrowRight') {
+                e.preventDefault();
+
+                if (['up', 'down', 'left', 'right', 'favs'].includes(focusedSection)) {
+                     const containerId = `container-${focusedSection}`;
+                     const itemsPerCol = getItemsPerColumn(containerId);
+                     const notes = getSortedNotes(focusedSection);
+                     
+                     const newIndex = focusedIndex + itemsPerCol;
+                     
+                     if (newIndex < notes.length) {
+                         setFocusedIndex(newIndex);
+                         return; 
+                     }
+                }
+
+                if (focusedSection === 'content') return;
+
+                if (focusedSection === 'center') {
+                    if (topology.righters.length > 0) {
+                        setFocusedSection('right');
+                        const target = Math.min(sectionIndices.right, topology.righters.length - 1);
+                        setFocusedIndex(target);
+                    } else {
+                        setFocusedSection('content');
+                    }
+                } else if (focusedSection === 'left') {
+                    setFocusedSection('up'); 
+                    setFocusedIndex(Math.min(sectionIndices.up, topology.uppers.length - 1));
+                } else if (focusedSection === 'favs') {
+                    setFocusedSection('down'); 
+                    setFocusedIndex(Math.min(sectionIndices.down, topology.downers.length - 1));
+                } else if (focusedSection === 'up') {
+                     setFocusedSection('right');
+                     setFocusedIndex(Math.min(sectionIndices.right, topology.righters.length - 1));
+                } else if (focusedSection === 'down') {
+                     if (showContent) {
+                        setFocusedSection('content');
+                     } else if (topology.righters.length > 0) {
+                        setFocusedSection('right');
+                        setFocusedIndex(Math.min(sectionIndices.right, topology.righters.length - 1));
+                     }
+                } 
             }
-        } else if (focusedSection === 'left') {
-             const arr = topology.lefters;
-             if (focusedIndex === arr.length - 1) {
-                 if (showFavorites && favorites.length > 0) {
-                    setFocusedSection('favs');
-                    setFocusedIndex(Math.min(sectionIndices.favs, favorites.length - 1));
-                 }
-             } else {
-                 setFocusedIndex(prev => Math.min(arr.length - 1, prev + 1));
-             }
-        } else if (focusedSection === 'right') {
-             const arr = topology.righters;
-             if (focusedIndex === arr.length - 1) {
-                 if (showContent) {
-                     setFocusedSection('content');
-                 }
-             } else {
-                 setFocusedIndex(prev => Math.min(arr.length - 1, prev + 1));
-             }
-        } else {
-            const arr = getSortedNotes(focusedSection);
-            setFocusedIndex(prev => Math.min(arr.length - 1, prev + 1));
-        }
-    } else if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        
-        // Handle Intra-Section Column Navigation (Left)
-        if (['up', 'down', 'left', 'right', 'favs'].includes(focusedSection)) {
-             const containerId = `container-${focusedSection}`;
-             const itemsPerCol = getItemsPerColumn(containerId);
-             const newIndex = focusedIndex - itemsPerCol;
-             if (newIndex >= 0) {
-                 setFocusedIndex(newIndex);
-                 return; // Stay in section, just moved column left
-             }
-             // If < 0, fall through to section switch logic
-        }
 
-        if (focusedSection === 'content') {
-             setFocusedSection('down');
-             setFocusedIndex(Math.min(sectionIndices.down, topology.downers.length - 1));
-             return;
-        }
-        if (focusedSection === 'center') {
-            if (topology.lefters.length > 0) {
-                setFocusedSection('left');
-                const target = Math.min(sectionIndices.left, topology.lefters.length - 1);
-                setFocusedIndex(target);
-            } else if (showFavorites && favorites.length > 0) {
-                 setFocusedSection('favs');
-                 const target = Math.min(sectionIndices.favs, favorites.length - 1);
-                 setFocusedIndex(target);
-            }
-        } else if (focusedSection === 'right') {
-             setFocusedSection('up');
-             setFocusedIndex(Math.min(sectionIndices.up, topology.uppers.length - 1));
-        } else if (focusedSection === 'down') {
-             if (showFavorites && favorites.length > 0) {
-                 setFocusedSection('favs');
-                 setFocusedIndex(Math.min(sectionIndices.favs, favorites.length - 1));
-             } else {
-                 setFocusedSection('left');
-                 setFocusedIndex(Math.min(sectionIndices.left, topology.lefters.length - 1));
-             }
-        } else if (focusedSection === 'up') {
-            setFocusedSection('left');
-            setFocusedIndex(Math.min(sectionIndices.left, topology.lefters.length - 1));
-        }
-    } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
+          }, [focusedSection, focusedIndex, topology, favorites, centralNoteId, renameModalOpen, isSearchActive, editorOpen, linkerOpen, settingsOpen, fontSize, sectionIndices, getFocusedNote, getSortedNotes, showFavDropdown, showMainMenu, selectedNoteIds, showFavorites, showContent, handleDeleteAction, importModalOpen, calendarOpen, back, forward]);
 
-        // Handle Intra-Section Column Navigation (Right)
-        if (['up', 'down', 'left', 'right', 'favs'].includes(focusedSection)) {
-             const containerId = `container-${focusedSection}`;
-             const itemsPerCol = getItemsPerColumn(containerId);
-             const notes = getSortedNotes(focusedSection);
-             const newIndex = focusedIndex + itemsPerCol;
-             
-             if (newIndex < notes.length) {
-                 setFocusedIndex(newIndex);
-                 return; // Stay in section, just moved column right
-             }
-             // If >= length, fall through to section switch logic
-        }
-
-        if (focusedSection === 'content') return;
-        if (focusedSection === 'center') {
-            if (topology.righters.length > 0) {
-                setFocusedSection('right');
-                const target = Math.min(sectionIndices.right, topology.righters.length - 1);
-                setFocusedIndex(target);
-            } else {
-                setFocusedSection('content');
-            }
-        } else if (focusedSection === 'left') {
-            setFocusedSection('up'); 
-            setFocusedIndex(Math.min(sectionIndices.up, topology.uppers.length - 1));
-        } else if (focusedSection === 'favs') {
-            setFocusedSection('down'); 
-            setFocusedIndex(Math.min(sectionIndices.down, topology.downers.length - 1));
-        } else if (focusedSection === 'up') {
-             setFocusedSection('right');
-             setFocusedIndex(Math.min(sectionIndices.right, topology.righters.length - 1));
-        } else if (focusedSection === 'down') {
-             if (showContent) {
-                setFocusedSection('content');
-             } else if (topology.righters.length > 0) {
-                setFocusedSection('right');
-                setFocusedIndex(Math.min(sectionIndices.right, topology.righters.length - 1));
-             }
-        } 
-    }
-
-  }, [focusedSection, focusedIndex, topology, favorites, centralNoteId, renameModalOpen, isSearchActive, editorOpen, linkerOpen, settingsOpen, fontSize, sectionIndices, getFocusedNote, getSortedNotes, showFavDropdown, showMainMenu, selectedNoteIds, showFavorites, showContent, handleDeleteAction, importModalOpen]);
-
-  // Robust Event Listener Attachment
-  const handleKeyDownRef = useRef(handleGlobalKeyDown);
-  
-  useEffect(() => {
-    handleKeyDownRef.current = handleGlobalKeyDown;
-  }, [handleGlobalKeyDown]);
-
-  useEffect(() => {
-    const handler = (e) => handleKeyDownRef.current(e);
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, []);
+          const handleKeyDownRef = useRef(handleGlobalKeyDown);
           
+          useEffect(() => {
+            handleKeyDownRef.current = handleGlobalKeyDown;
+          }, [handleGlobalKeyDown]);
+
+          useEffect(() => {
+            const handler = (e) => handleKeyDownRef.current(e);
+            window.addEventListener('keydown', handler);
+            return () => window.removeEventListener('keydown', handler);
+          }, []);
+                  
           const labelStyle = "absolute -top-[5px] left-6 px-3 py-0.5 font-bold tracking-wider bg-[var(--theme-section)] text-[color-mix(in_srgb,var(--theme-accent)_50%,transparent)] select-none z-20 pointer-events-none rounded-full border border-black/10 dark:border-white/10";
           const uiFontSize = Math.max(14, fontSize - 4);
           const activeNote = getFocusedNote();
@@ -2884,16 +3081,13 @@
 
               <div className="flex-1 flex flex-col h-full min-w-0">
                 
-                {/* Top Bar - Compacted */}
                 <div 
                     style={{ fontSize: `${uiFontSize}px` }} 
                     className="h-12 flex-shrink-0 flex items-center px-2 gap-1 z-40 shadow-md relative bg-[var(--theme-bars)] text-foreground transition-colors duration-300"
                 >
                     
-                    {/* Left Group: Menu, Home, Favorites List */}
                     <div className="flex items-center gap-1">
                         
-                        {/* Main Menu (Hamburger) */}
                         <div className="relative">
                             <button 
                                 onClick={() => setShowMainMenu(!showMainMenu)} 
@@ -2906,7 +3100,6 @@
                             {showMainMenu && (
                                 <div className="absolute top-full left-0 mt-2 w-64 bg-card text-foreground border border-gray-200 dark:border-gray-700 shadow-xl rounded-md z-50 flex flex-col py-2">
                                      
-                                     {/* Vault Switcher Accordion */}
                                      <div className="border-b border-gray-100 dark:border-gray-800 mb-1 pb-1">
                                         <button 
                                             onClick={() => setShowVaultListInMenu(!showVaultListInMenu)}
@@ -2939,7 +3132,6 @@
                                         )}
                                      </div>
 
-                                     {/* Theme Switcher */}
                                      <button 
                                         onClick={() => { setIsDarkMode(!isDarkMode); setShowMainMenu(false); }}
                                         className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-3 text-sm text-foreground"
@@ -2954,7 +3146,6 @@
                                         <span>Switch Theme</span>
                              </button>
 
-                             {/* Settings */}
                              <button 
                                 onClick={() => { setSettingsOpen(true); setShowMainMenu(false); }}
                                 className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-3 text-sm text-foreground"
@@ -2963,7 +3154,6 @@
                                 <span>Settings</span>
                              </button>
 
-                             {/* Export */}
                              <button 
                                 onClick={() => { exportData(); setShowMainMenu(false); }}
                                 className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-3 text-sm text-foreground"
@@ -2972,7 +3162,6 @@
                                 <span>Export Data</span>
                              </button>
 
-                             {/* Import */}
                              <button 
                                 onClick={() => { importData(); setShowMainMenu(false); }}
                                 className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-3 text-sm text-foreground"
@@ -2984,6 +3173,27 @@
                     )}
                 </div>
 
+                <div className="flex items-center gap-0.5">
+                    <button
+                        onClick={() => back()}
+                        disabled={!canBack}
+                        title="Back (Alt + Left)"
+                        className={`p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${!canBack ? 'opacity-30 cursor-not-allowed' : ''}`}
+                        style={{ color: 'var(--theme-accent)' }}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                    </button>
+                    <button
+                        onClick={() => forward()}
+                        disabled={!canForward}
+                        title="Forward (Alt + Right)"
+                        className={`p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${!canForward ? 'opacity-30 cursor-not-allowed' : ''}`}
+                        style={{ color: 'var(--theme-accent)' }}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                    </button>
+                </div>
+
                 <button 
                     onClick={goHome} 
                     title="Go Home" 
@@ -2993,16 +3203,24 @@
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
                 </button>
 
-                <button 
-                    onClick={handleJournal} 
-                    title="Go to Today's Journal (Ctrl+J)" 
-                    className="p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
-                    style={{ color: 'var(--theme-accent)' }}
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                </button>
+                <div className="relative">
+                    <button 
+                        onClick={() => setCalendarOpen(!calendarOpen)} 
+                        title="Journal / Calendar (Ctrl+J)" 
+                        className="p-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+                        style={{ color: 'var(--theme-accent)' }}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                    </button>
+                    <CalendarDropdown 
+                        isOpen={calendarOpen}
+                        onClose={() => setCalendarOpen(false)}
+                        onSelectDate={handleCalendarSelect}
+                        existingDates={existingJournalDates}
+                        onMonthChange={handleCalendarMonthChange}
+                    />
+                </div>
 
-                 {/* Favorites Dropdown */}
                  <div className="relative">
                     <button 
                         title="Favorites List"
@@ -3031,7 +3249,7 @@
                                     key={fav.id}
                                     className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer text-sm truncate"
                                     onClick={() => {
-                                        setCentralNoteId(fav.id);
+                                        visit(fav.id);
                                         setShowFavDropdown(false);
                                     }}
                                 >
@@ -3043,10 +3261,8 @@
                 </div>
             </div>
 
-            {/* Separator 1 */}
             <div className="h-6 w-px bg-current opacity-20 mx-0.5"></div>
 
-            {/* Center Group: Note Actions */}
              <div className="flex items-center gap-1">
                 <button 
                     title="Toggle Favorite (Current Note)"
@@ -3091,10 +3307,8 @@
                 </button>
             </div>
 
-            {/* Separator 2 */}
             <div className="h-6 w-px bg-current opacity-20 mx-0.5"></div>
 
-             {/* Linking Tools */}
              <div className="flex items-center gap-1">
                 <button 
                     onClick={() => changeRelationship('unlink')}
@@ -3131,10 +3345,8 @@
                 </button>
              </div>
 
-             {/* Separator 3 */}
              <div className="h-6 w-px bg-current opacity-20 mx-0.5"></div>
 
-            {/* Right: Search (Fill) */}
             <div className="relative flex-1">
                 <input 
                     ref={searchInputRef}
@@ -3158,8 +3370,7 @@
                             setActiveSearchIndex(prev => (prev - 1 + searchResults.length) % searchResults.length);
                         } else if (e.key === 'Enter') {
                             e.preventDefault();
-                            e.stopPropagation(); // Stop global handlers
-                            // Fix: Directly use index instead of complex logic
+                            e.stopPropagation(); 
                             const selected = searchResults[activeSearchIndex];
                             if (selected) {
                                 handleSearchSelect(selected.id);
@@ -3188,7 +3399,6 @@
 
         </div>
 
-        {/* Canvas Area - 3-COLUMN FLEX LAYOUT */}
         <div 
             ref={mainContainerRef}
             className="flex-1 bg-[var(--theme-bg)] p-3 overflow-hidden outline-none relative transition-colors duration-300" 
@@ -3196,10 +3406,8 @@
         >
             <div className="flex h-full w-full gap-3">
                 
-                {/* --- Left Column (25%) --- */}
                 <div className="flex flex-col gap-3 w-1/4">
                     
-                    {/* Related (Top Left) */}
                     <div className={`${showFavorites ? 'flex-1' : 'h-full'} relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0`}>
                         <div className={labelStyle} style={{ fontSize: `${Math.max(10, fontSize - 10)}px` }}>Related</div>
                         <NoteSection
@@ -3217,14 +3425,13 @@
                                 if (isCtrl) {
                                     handleToggleSelection(id);
                                 } else {
-                                    if (id !== centralNoteId) setCentralNoteId(id);
+                                    if (id !== centralNoteId) visit(id);
                                 }
                             }}
                             scrollPositionsRef={scrollPositionsRef}
                         />
                     </div>
 
-                    {/* Favorites (Bottom Left) - Conditional */}
                     {showFavorites && (
                         <div className="flex-1 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
                             <div className={labelStyle} style={{ fontSize: `${Math.max(10, fontSize - 10)}px` }}>Favorites</div>
@@ -3243,7 +3450,7 @@
                                     if (isCtrl) {
                                         handleToggleSelection(id);
                                     } else {
-                                        if (id !== centralNoteId) setCentralNoteId(id);
+                                        if (id !== centralNoteId) visit(id);
                                     }
                                 }}
                                 scrollPositionsRef={scrollPositionsRef}
@@ -3252,13 +3459,10 @@
                     )}
                 </div>
 
-                {/* --- Center Column (50%) --- */}
                 <div className="flex flex-col gap-3 w-1/2">
                     
-                    {/* Top Wrapper (Parents + Active) - flex-1 matches side columns' top section */}
                     <div className="flex-1 flex flex-col gap-3 min-h-0">
                         
-                        {/* Parents (35% of column ~ 70% of wrapper) */}
                         <div className="flex-[7] relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
                              <div className={labelStyle} style={{ fontSize: `${Math.max(10, fontSize - 10)}px` }}>Parents</div>
                              <div className="absolute inset-0 overflow-x-auto overflow-y-hidden custom-scrollbar rounded-3xl pt-6">
@@ -3277,7 +3481,7 @@
                                         if (isCtrl) {
                                             handleToggleSelection(id);
                                         } else {
-                                            if (id !== centralNoteId) setCentralNoteId(id);
+                                            if (id !== centralNoteId) visit(id);
                                         }
                                     }}
                                     scrollPositionsRef={scrollPositionsRef}
@@ -3285,7 +3489,6 @@
                              </div>
                         </div>
 
-                        {/* Active Note (15% of column ~ 30% of wrapper) */}
                         <div className="flex-[3] relative flex items-center justify-center p-4 z-10 bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
                             <div className={labelStyle} style={{ fontSize: `${Math.max(10, fontSize - 10)}px` }}>Active Note</div>
                             {topology.center && (
@@ -3298,7 +3501,6 @@
                                         onClick={() => {}}
                                         subtitle={centerSubtitle}
                                     />
-                                    {/* Status Icons (Moved to Section Container) */}
                                     <div className="absolute bottom-4 right-4 flex gap-1 pointer-events-none">
                                         {topology.center.isFavorite && (
                                             <svg className="text-yellow-600 drop-shadow-sm" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
@@ -3312,7 +3514,6 @@
                         </div>
                     </div>
 
-                    {/* Children (Bot Center - 50%) */}
                     <div className="flex-1 relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
                         <div className={labelStyle} style={{ fontSize: `${Math.max(10, fontSize - 10)}px` }}>Children</div>
                         <div className="absolute inset-0 overflow-x-auto overflow-y-hidden custom-scrollbar rounded-3xl pt-6">
@@ -3331,7 +3532,7 @@
                                     if (isCtrl) {
                                         handleToggleSelection(id);
                                     } else {
-                                        if (id !== centralNoteId) setCentralNoteId(id);
+                                        if (id !== centralNoteId) visit(id);
                                     }
                                 }}
                                 scrollPositionsRef={scrollPositionsRef}
@@ -3340,10 +3541,8 @@
                     </div>
                 </div>
 
-                {/* --- Right Column (25%) --- */}
                 <div className="flex flex-col gap-3 w-1/4">
                     
-                    {/* Siblings (Top Right) */}
                     <div className={`${showContent ? 'flex-1' : 'h-full'} relative bg-[var(--theme-section)] rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0`}>
                         <div className={labelStyle} style={{ fontSize: `${Math.max(10, fontSize - 10)}px` }}>Siblings</div>
                          <NoteSection
@@ -3361,14 +3560,13 @@
                                 if (isCtrl) {
                                     handleToggleSelection(id);
                                 } else {
-                                    if (id !== centralNoteId) setCentralNoteId(id);
+                                    if (id !== centralNoteId) visit(id);
                                 }
                             }}
                             scrollPositionsRef={scrollPositionsRef}
                         />
                     </div>
 
-                    {/* Content Preview (Bottom Right) - Conditional */}
                     {showContent && (
                         <div 
                             ref={contentPreviewRef}
@@ -3387,27 +3585,25 @@
 
             </div>
         </div>
-        
-        {/* --- Footer / Status Bar --- */}
+
         <div style={{ fontSize: `${uiFontSize}px` }} className="h-8 flex-shrink-0 bg-[var(--theme-bars)] flex items-center justify-between px-4 text-foreground z-50 transition-colors duration-300">
             <div className="flex-shrink-0 opacity-90">
-                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.3.0
+                Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.3.5
             </div>
             <div className="opacity-60 truncate ml-4 text-right">
                 Arrows: Nav | Space: Open | Enter: Center Focus | Shift+Enter: Edit | Ctrl+Arrows: Link | F2: Rename | Bksp: Unlink
             </div>
         </div>
 
-      </div>
+        </div>
 
-      {/* --- Modals --- */}
-      <LinkerModal 
+        <LinkerModal 
         isOpen={linkerOpen} 
         type={linkerType} 
         onClose={() => setLinkerOpen(false)} 
         onSelect={handleLinkerSelect} 
-      />
-      <MarkdownEditor 
+        />
+        <MarkdownEditor 
         isOpen={editorOpen}
         initialMode={editorMode}
         note={getFocusedNote()}
@@ -3417,14 +3613,14 @@
             loadTopology(centralNoteId);
         }}
         onInternalLinkClick={handleInternalLinkClick}
-      />
-      <RenameModal
+        />
+        <RenameModal
         isOpen={renameModalOpen}
         currentTitle={noteToRename?.title || ''}
         onClose={() => setRenameModalOpen(false)}
         onRename={handleRename}
-      />
-      <SettingsModal
+        />
+        <SettingsModal
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         currentCentralNoteId={centralNoteId}
@@ -3432,20 +3628,24 @@
         onFontSizeChange={setFontSize}
         onThemeChange={() => setThemeTick(t => t + 1)}
         onSettingsChange={refreshSettings}
-      />
-      <ImportModal 
+        />
+        <ImportModal 
         isOpen={importModalOpen}
         importData={pendingImportData}
         onClose={() => setImportModalOpen(false)}
         onConfirm={handleConfirmImport}
-      />
-    </div>
-  );
-}
+        />
+        </div>
+        );
+        }
 
         const rootElement = document.getElementById('root');
         const root = ReactDOM.createRoot(rootElement);
-        root.render(<App />);
+        root.render(
+            <React.StrictMode>
+                <App />
+            </React.StrictMode>
+        );
     </script>
 </body>
 </html>

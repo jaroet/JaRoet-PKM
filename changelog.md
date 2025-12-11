@@ -3,6 +3,16 @@
 
 All notable changes to the JaRoet PKM project will be documented in this file.
 
+## [0.3.5] - 2024-05-23
+
+### Features
+- **Navigation History:** Added browser-style Back and Forward navigation to the app.
+    - **History Stack:** The app now remembers your navigation path (up to 50 items).
+    - **UI Buttons:** Added Back (`<`) and Forward (`>`) buttons to the top bar, which enable/disable based on history availability.
+    - **Hotkeys:** 
+        - `Alt + Left`: Navigate Back.
+        - `Alt + Right`: Navigate Forward.
+
 ## [0.3.4] - 2024-05-23
 
 ### Fixed
