@@ -3,6 +3,26 @@
 
 All notable changes to the JaRoet PKM project will be documented in this file.
 
+## [0.3.9] - 2024-05-23
+
+### Fixed
+- **Release Build:** Fixed a critical syntax error in the `index.html` distribution file caused by incorrect merging of the React application logic.
+- **Dependencies:** Clarified the split between the UI layer (React) and the Logic layer (`jaroet-lib.js`). The App now correctly imports all database and utility functions from the global `window.JaroetLib` namespace.
+
+## [0.3.8] - 2024-05-23
+
+### Refactor
+- **Versioning Strategy:** Decoupled the version number from the main application view (`App.tsx`). The version is now defined in the core library/service. This allows future updates to bump the version number without requiring changes to the UI layer, simplifying the release process for the split-file architecture.
+- **Split-File Support:** Optimized the application to run seamlessly as a 2-file deployment (`index.html` + `jaroet-lib.js`), bypassing single-file generation limits.
+
+## [0.3.7] - 2024-05-23
+
+### Refactor
+- **Library Architecture:** Refactored the monolithic `index.html` into a split architecture. 
+    - **`jaroet-lib.js`**: Contains all heavy logic (Database, Markdown, Journaling).
+    - **`index.html`**: Contains the React UI and references the external library.
+    - Added a **Web-based Builder** (`builder.html`) to merge these two files back into a standalone single-file app if desired.
+
 ## [0.3.6] - 2024-05-23
 
 ### Refactor

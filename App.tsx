@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
 import { marked } from 'marked';
-import { db, getTopology, createNote, updateNote, deleteNote, getFavorites, toggleFavorite, seedDatabase, getNote, getAllNotes, importNotes, getHomeNoteId, searchNotes, getFontSize, getNoteCount, getVaultList, getCurrentVaultName, switchVault, getAppTheme, AppTheme, getSectionVisibility, findNoteByTitle, getNoteTitlesByPrefix } from './services/db';
+import { db, getTopology, createNote, updateNote, deleteNote, getFavorites, toggleFavorite, seedDatabase, getNote, getAllNotes, importNotes, getHomeNoteId, searchNotes, getFontSize, getNoteCount, getVaultList, getCurrentVaultName, switchVault, getAppTheme, AppTheme, getSectionVisibility, findNoteByTitle, getNoteTitlesByPrefix, APP_VERSION } from './services/db';
 import { goToToday, goToDate } from './services/journal';
 import { useHistory } from './hooks/useHistory';
 import { Note, Section, Topology, SearchResult } from './types';
@@ -1791,7 +1791,7 @@ function App() {
 {/* --- Footer / Status Bar --- */}
 <div style={{ fontSize: `${uiFontSize}px` }} className="h-8 flex-shrink-0 bg-[var(--theme-bars)] flex items-center justify-between px-4 text-foreground z-50 transition-colors duration-300">
     <div className="flex-shrink-0 opacity-90">
-        Notes: {totalNoteCount} | DB: {getCurrentVaultName()} 0.3.5
+        Notes: {totalNoteCount} | {getCurrentVaultName()} {APP_VERSION}
     </div>
     <div className="opacity-60 truncate ml-4 text-right">
         Arrows: Nav | Space: Open | Enter: Center Focus | Shift+Enter: Edit | Ctrl+Arrows: Link | F2: Rename | Bksp: Unlink

@@ -2,6 +2,8 @@
 import Dexie, { Table } from 'dexie';
 import { Note, Topology, SearchResult } from '../types';
 
+export const APP_VERSION = '0.3.8';
+
 // --- Vault Management ---
 
 const VAULT_LIST_KEY = 'nexusnode_vaults';
