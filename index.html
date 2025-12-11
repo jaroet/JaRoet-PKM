@@ -1,77 +1,97 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
+  <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>JaRoet PKM</title>
-    
-    <!-- STYLING -->
     <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
     <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        background: 'var(--background)',
-                        foreground: 'var(--foreground)',
-                        card: 'var(--card)',
-                        'card-foreground': 'var(--card-foreground)',
-                        primary: 'var(--primary)',
-                        'primary-foreground': 'var(--primary-foreground)'
-                    }
-                }
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              background: 'var(--background)',
+              foreground: 'var(--foreground)',
+              card: 'var(--card)',
+              'card-foreground': 'var(--card-foreground)',
+              primary: 'var(--primary)',
+              'primary-foreground': 'var(--primary-foreground)',
             }
+          }
         }
+      }
     </script>
-    <link rel="stylesheet" href="dist/css/style.css?v=0.3.14">
-
-    <!-- DEPENDENCIES -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.min.js"></script>
-    <script src="https://unpkg.com/marked@9.1.2/marked.min.js"></script>
-    <script src="https://unpkg.com/htm@3.1.1/dist/htm.umd.js"></script>
-
-    <!-- APP SCRIPTS (Order Matters) -->
-    <script src="dist/js/globals.js?v=0.3.14"></script>
-    <script src="dist/js/services/markdown.js?v=0.3.14"></script>
-    <script src="dist/js/services/db.js?v=0.3.14"></script>
-    <script src="dist/js/services/journal.js?v=0.3.14"></script>
-    <script src="dist/js/hooks/useHistory.js?v=0.3.14"></script>
-    
-    <!-- COMPONENTS -->
-    <script src="dist/js/components/Icons.js?v=0.3.14"></script>
-    <script src="dist/js/components/NoteCard.js?v=0.3.14"></script>
-    <script src="dist/js/components/NoteSection.js?v=0.3.14"></script>
-    <script src="dist/js/components/LinkerModal.js?v=0.3.14"></script>
-    <script src="dist/js/components/Editor.js?v=0.3.14"></script>
-    <script src="dist/js/components/CalendarDropdown.js?v=0.3.14"></script>
-    <script src="dist/js/components/SettingsModal.js?v=0.3.14"></script>
-    <script src="dist/js/components/ImportModal.js?v=0.3.14"></script>
-    <script src="dist/js/components/RenameModal.js?v=0.3.14"></script>
-    <script src="dist/js/components/TopBar.js?v=0.3.14"></script>
-    <script src="dist/js/components/StatusBar.js?v=0.3.14"></script>
-    
-    <!-- MAIN APP -->
-    <script src="dist/js/App.js?v=0.3.14"></script>
-<script type="importmap">
+    <style>
+      :root {
+        --background: #f8fafc;
+        --foreground: #0f172a;
+        --card: #ffffff;
+        --card-foreground: #0f172a;
+        --primary: #3b82f6;
+        --primary-foreground: #ffffff;
+        --scrollbar-thumb: #94a3b8;
+      }
+      .dark {
+        --background: #0f172a;
+        --foreground: #f8fafc;
+        --card: #1e293b;
+        --card-foreground: #f8fafc;
+        --primary: #60a5fa;
+        --primary-foreground: #0f172a;
+        --scrollbar-thumb: #475569;
+      }
+      body {
+        background-color: var(--background);
+        color: var(--foreground);
+        transition: background-color 0.3s, color 0.3s;
+      }
+      
+      /* Custom Scrollbar Styles */
+      .custom-scrollbar {
+        scrollbar-width: thin;
+        scrollbar-color: var(--scrollbar-thumb) transparent;
+      }
+      
+      /* WebKit - Force visible scrollbars */
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 12px;
+        height: 12px;
+        display: block;
+      }
+      
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background-color: var(--scrollbar-thumb);
+        border-radius: 6px;
+        border: 3px solid transparent;
+        background-clip: content-box;
+      }
+      
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background-color: var(--primary);
+      }
+      
+      .custom-scrollbar::-webkit-scrollbar-corner {
+        background: transparent;
+      }
+    </style>
+  <script type="importmap">
 {
   "imports": {
-    "dexie": "https://esm.sh/dexie@^4.2.1",
-    "react": "https://esm.sh/react@^19.2.1",
-    "marked": "https://esm.sh/marked@^17.0.1",
-    "react/": "https://esm.sh/react@^19.2.1/"
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "dexie": "https://aistudiocdn.com/dexie@^4.2.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "marked": "https://aistudiocdn.com/marked@^17.0.1"
   }
 }
 </script>
 </head>
-<body>
+  <body>
     <div id="root"></div>
-    <script>
-        // Initialize App
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(window.html`<${Jaroet.App} />`);
-    </script>
-</body>
+  </body>
 </html>
