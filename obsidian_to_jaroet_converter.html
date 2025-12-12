@@ -121,7 +121,7 @@
             </small>
         </div>
 
-        <div class="file-upload" onclick="document.getElementById('dirInput').click()">
+        <div class="file-upload" role="button" tabindex="0" onclick="document.getElementById('dirInput').click()" onkeydown="(e) => e.key === 'Enter' && document.getElementById('dirInput').click()">
             <span id="fileLabel">Click to select Vault Folder</span>
             <input type="file" id="dirInput" webkitdirectory multiple style="display: none;">
         </div>
@@ -210,12 +210,13 @@
             log("Starting conversion...");
             
             const JOURNAL_FOLDER = journalInput.value.trim();
-            const notes = [];
-            const pathIdMap = new Map(); // path string -> uuid
+            const notes = []; // The final array of note objects
+            const noteMap = new Map(); // Fast ID -> note object lookup
+            const pathIdMap = new Map(); // Folder path string -> uuid
             
             // 1. Create Roots
             const now = Date.now();
-            
+
             // Obsidian Import Root
             const rootId = crypto.randomUUID();
             const rootNote = {
@@ -229,6 +230,7 @@
                 modifiedAt: now
             };
             notes.push(rootNote);
+            noteMap.set(rootId, rootNote);
             pathIdMap.set('ROOT', rootId);
 
             // Journal Handling Helpers
@@ -240,7 +242,7 @@
 
             const getJournalHub = () => {
                 if (!journalHubId) {
-                    journalHubId = crypto.randomUUID();
+                    journalHubId = crypto.randomUUID(); // This ID is the root of all journal entries
                     notes.push({
                         id: journalHubId,
                         title: 'Journal Hub',
@@ -251,6 +253,7 @@
                         createdAt: now,
                         modifiedAt: now
                     });
+                    noteMap.set(journalHubId, notes[notes.length - 1]);
                     // Note: Journal Hub is NOT linked to Obsidian Import to keep it clean as a separate tree/root.
                 }
                 return journalHubId;
@@ -273,10 +276,9 @@
                         createdAt: now,
                         modifiedAt: now
                     });
+                    noteMap.set(yearId, notes[notes.length - 1]);
                     journalCache.years[dateInfo.yearTitle] = yearId;
-                    
-                    // Link Hub -> Year
-                    const hub = notes.find(n => n.id === hubId);
+                    const hub = noteMap.get(hubId);
                     hub.linksTo.push(yearId);
                 }
 
@@ -294,14 +296,61 @@
                         createdAt: now,
                         modifiedAt: now
                     });
+                    noteMap.set(monthId, notes[notes.length - 1]);
                     journalCache.months[dateInfo.monthTitle] = monthId;
-
-                    // Link Year -> Month
-                    const year = notes.find(n => n.id === yearId);
+                    const year = noteMap.get(yearId);
                     year.linksTo.push(monthId);
                 }
 
                 return monthId; // Return Month ID so Day can link to it
+            };
+
+            // Helper for creating folder notes
+            const getOrCreateFolderHierarchy = (internalPath) => {
+                let currentParentId = rootId;
+                // internalPath has ["Folder", "Sub", "File.md"]
+                // We iterate up to length-1 (Folders only)
+                for (let i = 0; i < internalPath.length - 1; i++) {
+                    const folderName = internalPath[i];
+                    const folderKey = internalPath.slice(0, i + 1).join('/'); // "Folder" or "Folder/Sub"
+                    
+                    if (pathIdMap.has(folderKey)) {
+                        currentParentId = pathIdMap.get(folderKey);
+                    } else {
+                        // Create Folder Note
+                        const folderId = crypto.randomUUID();
+                        const folderNote = {
+                            id: folderId,
+                            title: folderName,
+                            content: `# ${folderName}\n\nFolder imported from Obsidian.`,
+                            linksTo: [],
+                            relatedTo: [],
+                            isFavorite: false,
+                            createdAt: now,
+                            modifiedAt: now
+                        };
+                        notes.push(folderNote);
+                        noteMap.set(folderId, folderNote);
+                        pathIdMap.set(folderKey, folderId);
+
+                        // Link Parent -> New Folder
+                        const parent = noteMap.get(currentParentId);
+                        if (parent) parent.linksTo.push(folderId);
+
+                        currentParentId = folderId;
+                    }
+                }
+                return currentParentId;
+            };
+
+            // Helper for progress updates
+            const updateProgress = async (processedCount, totalCount, message) => {
+                if (processedCount % 50 === 0 || processedCount === totalCount) {
+                    progressFill.style.width = `${(processedCount / totalCount) * 100}%`;
+                    log(`Processed ${processedCount} / ${totalCount} files... ${message}`);
+                    // Yield to the event loop to allow UI to update
+                    await new Promise(r => setTimeout(r, 0));
+                }
             };
 
             // 2. Process Files
@@ -327,7 +376,7 @@
                 const isJournalFolder = JOURNAL_FOLDER && internalPath.length > 1 && internalPath[0].toLowerCase() === JOURNAL_FOLDER.toLowerCase();
                 
                 let noteId = crypto.randomUUID();
-                let finalTitle = title;
+                let finalTitle = title; // Default title is filename without .md
                 
                 // --- LOGIC SPLIT ---
 
@@ -335,9 +384,7 @@
                     // Try to parse YYYY-MM-DD
                     const dateInfo = getJaRoetDateInfo(title);
                     if (dateInfo) {
-                        // It is a valid journal entry
-                        // Set Title: "2023-10-21"
-                        finalTitle = dateInfo.title;
+                        finalTitle = dateInfo.title; // e.g., "2023-10-21"
                         const monthId = getJournalParentIds(dateInfo);
                         
                         // Create Day Note linked to Month
@@ -352,20 +399,16 @@
                             modifiedAt: file.lastModified
                         };
                         notes.push(note);
+                        noteMap.set(noteId, note);
                         
                         // Link Month -> Day
-                        const month = notes.find(n => n.id === monthId);
+                        const month = noteMap.get(monthId);
                         month.linksTo.push(noteId);
                         
                         pathIdMap.set(fullPath, noteId); // Map original path to this ID
                         
                         processed++;
-                        if (processed % 50 === 0) {
-                            progressFill.style.width = `${(processed / selectedFiles.length) * 100}%`;
-                            log(`Processed ${processed} files (Journal)...`);
-                            await new Promise(r => setTimeout(r, 0)); // Yield UI
-                        }
-                        
+                        await updateProgress(processed, selectedFiles.length, "(Journal)");
                         // CRITICAL: Continue here ensures we do NOT fall through to folder creation logic.
                         // This file will have NO folder links.
                         continue; 
@@ -375,41 +418,7 @@
 
                 // --- STANDARD FOLDER HANDLING ---
 
-                // Build directory hierarchy for this file
-                let currentParentId = rootId;
-
-                // internalPath has ["Folder", "Sub", "File.md"]
-                // We iterate up to length-1 (Folders only)
-                for (let i = 0; i < internalPath.length - 1; i++) {
-                    const folderName = internalPath[i];
-                    const folderKey = internalPath.slice(0, i + 1).join('/'); // "Folder" or "Folder/Sub"
-                    
-                    if (pathIdMap.has(folderKey)) {
-                        currentParentId = pathIdMap.get(folderKey);
-                    } else {
-                        // Create Folder Note
-                        const folderId = crypto.randomUUID();
-                        const folderNote = {
-                            id: folderId,
-                            title: folderName,
-                            content: `# ${folderName}\n\nFolder imported from Obsidian.`,
-                            linksTo: [],
-                            relatedTo: [],
-                            isFavorite: false,
-                            createdAt: now,
-                            modifiedAt: now
-                        };
-                        notes.push(folderNote);
-                        pathIdMap.set(folderKey, folderId);
-
-                        // Link Parent -> New Folder
-                        const parent = notes.find(n => n.id === currentParentId);
-                        if (parent) parent.linksTo.push(folderId);
-
-                        currentParentId = folderId;
-                    }
-                }
-
+                const parentFolderId = getOrCreateFolderHierarchy(internalPath);
                 // Create the actual Note
                 const note = {
                     id: noteId,
@@ -422,20 +431,17 @@
                     modifiedAt: file.lastModified
                 };
                 notes.push(note);
+                noteMap.set(noteId, note);
                 pathIdMap.set(fullPath, noteId);
 
                 // Link Folder -> Note
-                const parent = notes.find(n => n.id === currentParentId);
+                const parent = noteMap.get(parentFolderId);
                 if (parent) parent.linksTo.push(noteId);
 
                 processed++;
-                if (processed % 50 === 0) {
-                    progressFill.style.width = `${(processed / selectedFiles.length) * 100}%`;
-                    log(`Processed ${processed} files...`);
-                    await new Promise(r => setTimeout(r, 0)); // Yield UI
-                }
+                await updateProgress(processed, selectedFiles.length, "");
             }
-
+            
             progressFill.style.width = '100%';
             log("Conversion complete!");
             log(`Total Notes: ${notes.length}`);
