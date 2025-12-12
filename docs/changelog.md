@@ -3,6 +3,11 @@
 
 All notable changes to the JaRoet PKM project will be documented in this file.
 
+## [0.3.15] - 2024-05-25
+
+### Changed
+- Version bump for release.
+
 ## [0.3.14] - 2024-05-24
 
 ### Fixed
