@@ -8,7 +8,7 @@ window.Jaroet = {
     Services: {},
     Components: {},
     Hooks: {},
-    APP_VERSION: '0.3.15'
+    APP_VERSION: '0.3.16'
 };
 
 // Bind HTM to React.createElement

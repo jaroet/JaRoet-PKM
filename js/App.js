@@ -2,9 +2,9 @@
 (function(J) {
     const { useState, useEffect, useRef, useCallback } = React;
     const { db, getTopology, createNote, updateNote, deleteNote, getFavorites, toggleFavorite, seedDatabase, getNote, getAllNotes, importNotes, getHomeNoteId, searchNotes, getFontSize, getNoteCount, getVaultList, getCurrentVaultName, switchVault, getAppTheme, getSectionVisibility, findNoteByTitle, getNoteTitlesByPrefix } = J.Services.DB;
-    const { goToDate, goToToday, getDateSubtitle } = J.Services.Journal;
+    const { goToDate, goToToday, getDateSubtitle } = J.Services.Journal; 
     const { createRenderer, wikiLinkExtension } = J.Services.Markdown;
-    const { NoteCard, LinkerModal, Editor, SettingsModal, ImportModal, RenameModal, NoteSection, TopBar, StatusBar, Icons, APP_VERSION } = J;
+    const { NoteCard, LinkerModal, Editor, SettingsModal, ImportModal, RenameModal, NoteSection, TopBar, StatusBar, Icons, AllNotesModal, APP_VERSION } = J;
     const { useHistory } = J.Hooks;
 
     marked.use({renderer:createRenderer({clickableCheckboxes:false}),extensions:[wikiLinkExtension]});
@@ -31,7 +31,7 @@
         // UI State
         const [menu,setMenu]=useState(false),[favDrop,setFavDrop]=useState(false),[vaultMenu,setVaultMenu]=useState(false),[cal,setCal]=useState(false),[calD,setCalD]=useState(new Set());
         const [search,setSearch]=useState(''),[sRes,setSRes]=useState([]),[sIdx,setSIdx]=useState(0),[sAct,setSAct]=useState(false);
-        const [ed,setEd]=useState(false),[edMode,setEdMode]=useState('view'),[lnk,setLnk]=useState(false),[lnkType,setLnkType]=useState('up'),[ren,setRen]=useState(false),[renN,setRenN]=useState(null),[sett,setSett]=useState(false),[imp,setImp]=useState(false),[impD,setImpD]=useState([]);
+        const [ed,setEd]=useState(false),[edMode,setEdMode]=useState('view'),[lnk,setLnk]=useState(false),[lnkType,setLnkType]=useState('up'),[ren,setRen]=useState(false),[renN,setRenN]=useState(null),[sett,setSett]=useState(false),[imp,setImp]=useState(false),[impD,setImpD]=useState([]),[allNotes,setAllNotes]=useState(false);
         const [prevH,setPrevH]=useState('');
         const searchInputRef=useRef(null);
 
@@ -163,7 +163,7 @@
         // --- KEYBOARD HANDLER ---
         const handleGlobalKeyDown = useCallback(async (e) => {
             const selState=selRef.current, fSecState=fSecRef.current, fIdxState=fIdxRef.current, topoState=topoRef.current, favsState=favsRef.current, visState=visRef.current, secIndState=secIndRef.current;
-            if (ren||ed||lnk||sett||imp||menu||cal||favDrop) { if (e.key === 'Escape') { if(menu) setMenu(false); if(cal) setCal(false); if(favDrop) setFavDrop(false); } return; }
+            if (ren||ed||lnk||sett||imp||menu||cal||favDrop||allNotes) { if (e.key === 'Escape') { if(menu) setMenu(false); if(cal) setCal(false); if(favDrop) setFavDrop(false); if(allNotes) setAllNotes(false); } return; }
             if (sAct) {
                 if (e.key==='Escape') { setSAct(false); e.preventDefault(); return; }
                 if (e.key==='ArrowDown') { e.preventDefault(); setSIdx(p=>(p+1)%sRes.length); return; }
@@ -249,7 +249,7 @@
                     activeNote=${activeNote} handleFavToggle=${handleFavToggle} setEd=${setEd} activeHasContent=${activeHasContent} setRenN=${setRenN} setRen=${setRen}
                     deleteNote=${deleteNote} currentId=${currentId} canUnlink=${canUnlink} changeRelationship=${changeRelationship} handleLinkAction=${handleLinkAction}
                     search=${search} doSearch=${doSearch} sAct=${sAct} setSAct=${setSAct} sRes=${sRes} sIdx=${sIdx} setSIdx=${setSIdx} navSearch=${navSearch}
-                    vaultMenu=${vaultMenu} setVaultMenu=${setVaultMenu} getCurrentVaultName=${getCurrentVaultName} switchVault=${switchVault} getVaultList=${getVaultList}
+                    vaultMenu=${vaultMenu} setVaultMenu=${setVaultMenu} setAllNotes=${setAllNotes}
                     setDark=${setDark} dark=${dark} setSett=${setSett} exportData=${exportData} setImpD=${setImpD} setImp=${setImp} fontSize=${fs}
                 />
 
@@ -321,6 +321,7 @@
                 <${SettingsModal} isOpen=${sett} onClose=${()=>setSett(false)} currentCentralNoteId=${currentId} fontSize=${fs} onFontSizeChange=${setFs} onThemeChange=${()=>setCount(c=>c+1)} onSettingsChange=${()=>getSectionVisibility().then(setVis)} />
                 <${ImportModal} isOpen=${imp} importData=${impD} onClose=${()=>setImp(false)} onConfirm=${async m=>{await importNotes(impD,m);setImp(false);window.location.reload()}} />
                 <${RenameModal} isOpen=${ren} currentTitle=${renN?renN.title:''} onClose=${()=>setRen(false)} onRename=${t=>{updateNote(renN.id,{title:t});setRen(false);getTopology(currentId).then(setTopo);}} />
+                <${AllNotesModal} isOpen=${allNotes} onClose=${()=>setAllNotes(false)} onSelect=${id=>{setAllNotes(false);nav(id);}} />
             </div>
         `;
     };
