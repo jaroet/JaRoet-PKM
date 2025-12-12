@@ -319,7 +319,7 @@
                 <${Editor} isOpen=${ed} mode=${edMode} note=${fSec==='center'?topo.center:getSortedNotes(fSec,topo,favs)[fIdx]} onClose=${()=>setEd(false)} onSave=${(id,c)=>{updateNote(id,{content:c});if(id===currentId)getTopology(currentId).then(setTopo)}} onLink=${async(t)=>{const n=await findNoteByTitle(t);if(n)nav(n.id)}} />
                 <${LinkerModal} isOpen=${lnk} type=${lnkType} onClose=${()=>setLnk(false)} onSelect=${handleLink} />
                 <${SettingsModal} isOpen=${sett} onClose=${()=>setSett(false)} currentCentralNoteId=${currentId} fontSize=${fs} onFontSizeChange=${setFs} onThemeChange=${()=>setCount(c=>c+1)} onSettingsChange=${()=>getSectionVisibility().then(setVis)} />
-                <${ImportModal} isOpen=${imp} importData=${impD} onClose=${()=>setImp(false)} onConfirm=${m=>{importNotes(impD,m);setImp(false);window.location.reload()}} />
+                <${ImportModal} isOpen=${imp} importData=${impD} onClose=${()=>setImp(false)} onConfirm=${async m=>{await importNotes(impD,m);setImp(false);window.location.reload()}} />
                 <${RenameModal} isOpen=${ren} currentTitle=${renN?renN.title:''} onClose=${()=>setRen(false)} onRename=${t=>{updateNote(renN.id,{title:t});setRen(false);getTopology(currentId).then(setTopo);}} />
             </div>
         `;
