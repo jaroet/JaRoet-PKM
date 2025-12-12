@@ -22,6 +22,7 @@
         const [confDel, setConfDel] = useState(false);
         const [confReset, setConfReset] = useState(false);
         const [curVault, setCurVault] = useState('');
+        const [dbLocation, setDbLocation] = useState('');
 
         // Initialize
         useEffect(() => {
@@ -45,7 +46,14 @@
                     setVis(v);
                     
                     setLocalFs(fontSize);
-                    setCurVault(getCurrentVaultName());
+                    const cv = getCurrentVaultName();
+                    setCurVault(cv);
+                    try {
+                        const origin = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : 'localhost';
+                        setDbLocation(`indexeddb://${origin}/${cv}`);
+                    } catch (e) {
+                        setDbLocation(`indexeddb://<unknown>/${cv}`);
+                    }
                     setQ(''); setRes([]);
                     setConfDel(false); setConfReset(false); setNewV('');
                     setTab('general');
@@ -228,6 +236,14 @@
                                         <div className="font-mono font-bold text-lg text-primary truncate">${curVault}</div>
                                     </div>
                                 </div>
+
+                                            <div>
+                                                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">IndexedDB Location</h3>
+                                                <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded mb-4 border border-gray-200 dark:border-gray-700">
+                                                    <div className="text-xs text-gray-500 mb-1">Where data is stored (read-only)</div>
+                                                    <div className="font-mono text-sm break-words text-foreground">${dbLocation}</div>
+                                                </div>
+                                            </div>
 
                                 <div>
                                     <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">New Vault</h3>
