@@ -13,7 +13,7 @@
             activeNote, handleFavToggle, setEd, activeHasContent, setRenN, setRen,
             canUnlink, changeRelationship, handleLinkAction,
             search, doSearch, sAct, setSAct, sRes, sIdx, setSIdx, navSearch,
-            vaultMenu, setVaultMenu, setDark, dark, setSett, exportData, setImpD, setImp,
+            vaultMenu, setVaultMenu, setDark, dark, setSett, exportData, setImpD, setImp, setAllNotes,
             fontSize
         } = props;
 
@@ -91,6 +91,8 @@
                             </div>
                         `}
                     </div>
+
+                    <${Btn} onClick=${() => setAllNotes(true)} icon=${Icons.List} title="All Notes" />
                 </div>
 
                 <${Sep} />

@@ -3,6 +3,11 @@
 
 All notable changes to the JaRoet PKM project will be documented in this file.
 
+## [0.3.16] - 2024-05-25
+
+### Improved
+- **All Notes Modal:** Created a All Notes list with the option to sort descending on createdDate or modifiedDate.
+
 ## [0.3.15] - 2024-05-25
 
 ### Changed
