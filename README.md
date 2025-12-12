@@ -13,7 +13,7 @@
 
 ## Documentation
 
-For a detailed guide on how to use the interface, shortcuts, and features, please read the [Full Documentation](documentation.md).
+For a detailed guide on how to use the interface, shortcuts, and features, please read the [Full Documentation](docs/documentation.md).
 
 ## Getting Started
 
