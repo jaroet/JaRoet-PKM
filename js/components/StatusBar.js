@@ -9,7 +9,7 @@
                 <div className="flex-shrink-0 opacity-90 flex items-center gap-1">
                     <span>Notes: <b>${noteCount}</b></span>
                     <span className="mx-2 opacity-50">|</span>
-                    <button onClick=${onVaultClick} className="font-semibold text-primary truncate max-w-[150px] hover:underline">${vaultName}</button>
+                    <button onClick=${onVaultClick} className="font-semibold text-primary truncate max-w-[150px] underline hover:opacity-80">${vaultName}</button>
                     <span className="mx-2 opacity-50">|</span>
                     <a href="https://github.com/jaroet/JaRoet-PKM/releases" target="_blank" rel="noopener noreferrer" className="opacity-70 hover:opacity-100 hover:text-primary hover:underline transition-all">
                         v${version}

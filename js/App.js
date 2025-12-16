@@ -28,8 +28,8 @@
         const visRef=useRef({showFavorites:true,showContent:true});
         const secIndRef=useRef({up:0,down:0,left:0,right:0,favs:0});
 
-        // UI State & Modals
-        const [menu,setMenu]=useState(false),[favDrop,setFavDrop]=useState(false),[cal,setCal]=useState(false),[calD,setCalD]=useState(new Set());
+        // UI State & Modals (removed `menu` and `setMenu`)
+        const [favDrop,setFavDrop]=useState(false),[cal,setCal]=useState(false),[calD,setCalD]=useState(new Set());
         const [vaultChooser, setVaultChooser] = useState(false);
         const [search,setSearch]=useState(''),[sRes,setSRes]=useState([]),[sIdx,setSIdx]=useState(0),[sAct,setSAct]=useState(false);
         const [ed,setEd]=useState(false),[edMode,setEdMode]=useState('view'),[lnk,setLnk]=useState(false),[lnkType,setLnkType]=useState('up'),[ren,setRen]=useState(false),[renN,setRenN]=useState(null),[sett,setSett]=useState(false),[imp,setImp]=useState(false),[impD,setImpD]=useState([]),[allNotes,setAllNotes]=useState(false);
@@ -182,7 +182,7 @@
         // --- KEYBOARD HANDLER ---
         const handleGlobalKeyDown = useCallback(async (e) => {
             const selState=selRef.current, fSecState=fSecRef.current, fIdxState=fIdxRef.current, topoState=topoRef.current, favsState=favsRef.current, visState=visRef.current, secIndState=secIndRef.current;
-            if (ren||ed||lnk||sett||imp||menu||cal||favDrop||allNotes||vaultChooser) { if (e.key === 'Escape') { if(menu) setMenu(false); if(cal) setCal(false); if(favDrop) setFavDrop(false); if(allNotes) setAllNotes(false); if(vaultChooser) setVaultChooser(false); } return; }
+            if (ren||ed||lnk||sett||imp||cal||favDrop||allNotes||vaultChooser) { if (e.key === 'Escape') { if(cal) setCal(false); if(favDrop) setFavDrop(false); if(allNotes) setAllNotes(false); if(vaultChooser) setVaultChooser(false); } return; }
             if (sAct) {
                 if (e.key==='Escape') { setSAct(false); setFSec('center'); e.preventDefault(); return; }
                 if (e.key==='ArrowDown') { e.preventDefault(); setSIdx(p=>(p+1)%sRes.length); return; }
@@ -253,7 +253,7 @@
                 else if(fSecState==='up'){ setFSec('right'); setFIdx(Math.min(secIndState.right, topo.righters.length-1)); }
                 else if(fSecState==='down'){ if(vis.showContent){ setFSec('content'); } else if(topo.righters.length){ setFSec('right'); setFIdx(Math.min(secIndState.right, topo.righters.length-1)); } }
             }
-        }, [currentId, back, forward, sRes, sIdx, sAct, ren, ed, lnk, sett, imp, menu, cal, favDrop]);
+        }, [currentId, back, forward, sRes, sIdx, sAct, ren, ed, lnk, sett, imp, cal, favDrop]);
 
         const handleKeyDownRef = useRef(handleGlobalKeyDown);
         useEffect(() => { handleKeyDownRef.current = handleGlobalKeyDown; }, [handleGlobalKeyDown]);
@@ -261,8 +261,8 @@
 
         return html`
             <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground font-sans flex-col">
-                <${TopBar} 
-                    menu=${menu} setMenu=${setMenu} nav=${nav} back=${back} forward=${forward} canBack=${canBack} canForward=${canForward} goHome=${async()=>{nav(await getHomeNoteId())}}
+                <${TopBar}
+                    nav=${nav} back=${back} forward=${forward} canBack=${canBack} canForward=${canForward} goHome=${async()=>{nav(await getHomeNoteId())}}
                     cal=${cal} setCal=${setCal} calD=${calD} setCalD=${setCalD} handleCalendarSelect=${async(d)=>{setCal(false);nav(await goToDate(d))}} handleCalendarMonthChange=${async(y,m)=>{const p=`${y}-${String(m).padStart(2,'0')}-`;setCalD(new Set(await getNoteTitlesByPrefix(p)))}}
                     favDrop=${favDrop} setFavDrop=${setFavDrop} favs=${favs}
                     activeNote=${activeNote} handleFavToggle=${handleFavToggle} setEd=${setEd} activeHasContent=${activeHasContent} setRenN=${setRenN} setRen=${setRen}
