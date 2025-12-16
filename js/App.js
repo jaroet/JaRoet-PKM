@@ -183,7 +183,7 @@
             const selState=selRef.current, fSecState=fSecRef.current, fIdxState=fIdxRef.current, topoState=topoRef.current, favsState=favsRef.current, visState=visRef.current, secIndState=secIndRef.current;
             if (ren||ed||lnk||sett||imp||menu||cal||favDrop||allNotes) { if (e.key === 'Escape') { if(menu) setMenu(false); if(cal) setCal(false); if(favDrop) setFavDrop(false); if(allNotes) setAllNotes(false); } return; }
             if (sAct) {
-                if (e.key==='Escape') { setSAct(false); e.preventDefault(); return; }
+                if (e.key==='Escape') { setSAct(false); setFSec('center'); e.preventDefault(); return; }
                 if (e.key==='ArrowDown') { e.preventDefault(); setSIdx(p=>(p+1)%sRes.length); return; }
                 if (e.key==='ArrowUp') { e.preventDefault(); setSIdx(p=>(p-1+sRes.length)%sRes.length); return; }
                 if (e.key==='Enter') { e.preventDefault(); if(sRes[sIdx]) { navSearch(sRes[sIdx].id); } return; }
@@ -272,8 +272,13 @@
                 />
 
                 <!-- Canvas -->
-                <div className="flex-1 bg-background p-3 overflow-hidden outline-none relative transition-colors duration-300">
-                    <div className="flex h-full w-full gap-3">
+                <div 
+                    className="flex-1 bg-background p-3 overflow-hidden outline-none relative transition-colors duration-300"
+                    onClick=${(e) => {
+                        if (e.target === e.currentTarget || e.target.classList.contains('canvas-flex-container')) setFSec('center');
+                    }}
+                >
+                    <div className="flex h-full w-full gap-3 canvas-flex-container">
                         <!-- Left Col -->
                         <div className="flex flex-col gap-3 w-1/4">
                             <div className=${`${vis.showFavorites?'flex-1':'h-full'} relative bg-card rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0`}>
