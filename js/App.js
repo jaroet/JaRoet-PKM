@@ -106,19 +106,37 @@
         const handleLink = async (tid, t) => {
             const focusedNote = getFocusedNote();
             const aid = focusedNote ? focusedNote.id : currentId;
-            if(!aid)return;
+            if (!aid) return;
+
             const doL = async (id) => {
-                const center = await getNote(aid); const target = await getNote(id);
-                if(center.linksTo.includes(id)) await updateNote(aid,{linksTo:center.linksTo.filter(x=>x!==id)});
+                const center = await getNote(aid);
+                const target = await getNote(id);
+                if (!center || !target) return;
+
+                // Unlink any previous relationships to prevent duplicates
+                if (center.linksTo.includes(id)) await updateNote(aid, { linksTo: center.linksTo.filter(x => x !== id) });
                 if(target.linksTo.includes(aid)) await updateNote(id,{linksTo:target.linksTo.filter(x=>x!==aid)});
                 if(center.relatedTo.includes(id)) await updateNote(aid,{relatedTo:center.relatedTo.filter(x=>x!==id)});
                 if(target.relatedTo.includes(aid)) await updateNote(id,{relatedTo:target.relatedTo.filter(x=>x!==aid)});
+
+                // Apply the new link
                 if(lnkType==='up'){ const trg=await getNote(id); await updateNote(id,{linksTo:[...trg.linksTo,aid]}); }
                 else if(lnkType==='down'){ const anc=await getNote(aid); await updateNote(aid,{linksTo:[...anc.linksTo,id]}); }
                 else { const anc=await getNote(aid); await updateNote(aid,{relatedTo:[...anc.relatedTo,id]}); const trg=await getNote(id); await updateNote(id,{relatedTo:[...trg.relatedTo,aid]}); }
             };
-            if(!tid&&t){ if(t.includes(';')){ for(const tt of t.split(';').map(x=>x.trim()).filter(Boolean)){ const n=await createNote(tt); await doL(n.id); } } else { const n=await createNote(t); await doL(n.id); } } 
-            else if(tid) await doL(tid);
+
+            if (tid) { await doL(tid); } 
+            else if (t) {
+                for (let title of t.split(';').map(x => x.trim()).filter(Boolean)) {
+                    if (title.startsWith(', ')) {
+                        const sourceNote = await getNote(aid);
+                        if (sourceNote) title = `${sourceNote.title} ${title.substring(2)}`.trim();
+                    }
+                    let noteToLink = await findNoteByTitle(title);
+                    if (!noteToLink) noteToLink = await createNote(title);
+                    await doL(noteToLink.id);
+                }
+            }
             if(currentId) getTopology(currentId).then(setTopo); getNoteCount().then(setCount);
         };
 
@@ -317,7 +335,7 @@
                 <${StatusBar} noteCount=${count} vaultName=${getCurrentVaultName()} version=${APP_VERSION} fontSize=${fs} />
 
                 <${Editor} isOpen=${ed} mode=${edMode} note=${fSec==='center'?topo.center:getSortedNotes(fSec,topo,favs)[fIdx]} onClose=${()=>setEd(false)} onSave=${(id,c)=>{updateNote(id,{content:c});if(id===currentId)getTopology(currentId).then(setTopo)}} onLink=${async(t)=>{const n=await findNoteByTitle(t);if(n)nav(n.id)}} />
-                <${LinkerModal} isOpen=${lnk} type=${lnkType} onClose=${()=>setLnk(false)} onSelect=${handleLink} />
+                <${LinkerModal} isOpen=${lnk} type=${lnkType} onClose=${()=>setLnk(false)} onSelect=${handleLink} sourceNoteId=${getFocusedNote()?.id || currentId} />
                 <${SettingsModal} isOpen=${sett} onClose=${()=>setSett(false)} currentCentralNoteId=${currentId} fontSize=${fs} onFontSizeChange=${setFs} onThemeChange=${()=>setCount(c=>c+1)} onSettingsChange=${()=>getSectionVisibility().then(setVis)} />
                 <${ImportModal} isOpen=${imp} importData=${impD} onClose=${()=>setImp(false)} onConfirm=${async m=>{await importNotes(impD,m);setImp(false);window.location.reload()}} />
                 <${RenameModal} isOpen=${ren} currentTitle=${renN?renN.title:''} onClose=${()=>setRen(false)} onRename=${t=>{updateNote(renN.id,{title:t});setRen(false);getTopology(currentId).then(setTopo);}} />
