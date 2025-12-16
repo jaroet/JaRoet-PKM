@@ -1,19 +1,19 @@
 
 (function(J) {
     const { useState, useRef, useEffect } = React;
-    const { Icons, CalendarDropdown } = J;
-    const { getCurrentVaultName, getVaultList, switchVault, deleteNote, getHomeNoteId } = J.Services.DB;
+    const { Icons, CalendarDropdown, VaultChooser } = J;
+    const { deleteNote, getHomeNoteId } = J.Services.DB;
     const { goToDate } = J.Services.Journal;
 
     J.TopBar = (props) => {
         const {
-            menu, setMenu, nav, back, forward, canBack, canForward, goHome,
+            nav, back, forward, canBack, canForward, goHome,
             cal, setCal, calD, setCalD, handleCalendarSelect, handleCalendarMonthChange,
             favDrop, setFavDrop, favs,
             activeNote, handleFavToggle, setEd, activeHasContent, setRenN, setRen,
             canUnlink, changeRelationship, handleLinkAction,
             search, doSearch, sAct, setSAct, sRes, sIdx, setSIdx, navSearch,
-            vaultMenu, setVaultMenu, setDark, dark, setSett, exportData, setImpD, setImp, setAllNotes,
+            setDark, dark, setSett, exportData, setImpD, setImp, setAllNotes,
             fontSize
         } = props;
 
@@ -51,25 +51,6 @@
                 
                 <!-- Left: Navigation & Menu -->
                 <div className="flex items-center gap-1">
-                    <div className="relative">
-                        <${Btn} onClick=${()=>setMenu(!menu)} icon=${Icons.Menu} title="Menu" active=${menu} />
-                        ${menu&&html`
-                            <div className="absolute top-full left-0 mt-2 w-64 bg-card border border-gray-200 dark:border-gray-700 shadow-xl rounded-md z-50 flex flex-col py-2 animate-in fade-in slide-in-from-top-2 duration-100">
-                                <div className="border-b border-gray-100 dark:border-gray-800 mb-1 pb-1">
-                                    <button onClick=${()=>setVaultMenu(!vaultMenu)} className="w-full px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 flex justify-between items-center text-sm">
-                                        <div className="flex items-center gap-2"><${Icons.Vault} width="16" height="16" /><span>Vault: <b>${getCurrentVaultName()}</b></span></div>
-                                        <span>▼</span>
-                                    </button>
-                                    ${vaultMenu&&html`<div className="bg-gray-50 dark:bg-zinc-900 border-y border-gray-100 dark:border-gray-800 max-h-48 overflow-y-auto custom-scrollbar">${getVaultList().map(v=>html`<div key=${v} onClick=${()=>{switchVault(v)}} className=${`px-8 py-2 hover:bg-gray-200 dark:hover:bg-gray-800 cursor-pointer text-sm truncate ${v===getCurrentVaultName()?'text-primary font-bold':''}`}>${v}</div>`)}</div>`}
-                                </div>
-                                <button onClick=${()=>{setDark(!dark);setMenu(false)}} className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 flex gap-2 items-center text-sm"><${dark?Icons.Sun:Icons.Moon} width="16" height="16" /><span>Toggle Theme</span></button>
-                                <button onClick=${()=>{setSett(true);setMenu(false)}} className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 flex gap-2 items-center text-sm"><${Icons.Settings} width="16" height="16" /><span>Settings</span></button>
-                                <button onClick=${()=>{exportData();setMenu(false)}} className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 flex gap-2 items-center text-sm"><${Icons.Download} width="16" height="16" /><span>Export JSON</span></button>
-                                <button onClick=${()=>{const i=document.createElement('input');i.type='file';i.accept='.json';i.onchange=e=>{const f=e.target.files[0];if(f){const r=new FileReader();r.onload=ev=>{setImpD(JSON.parse(ev.target.result));setImp(true);setMenu(false);};r.readAsText(f);}};i.click();}} className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 flex gap-2 items-center text-sm"><${Icons.Upload} width="16" height="16" /><span>Import JSON</span></button>
-                            </div>
-                        `}
-                    </div>
-
                     <div className="flex items-center bg-black/5 dark:bg-white/5 rounded-md p-0.5 gap-0.5">
                         <${Btn} onClick=${back} disabled=${!canBack} icon=${Icons.ChevronLeft} title="Back (Alt+Left)" />
                         <${Btn} onClick=${forward} disabled=${!canForward} icon=${Icons.ChevronRight} title="Forward (Alt+Right)" />
@@ -118,7 +99,7 @@
                 <${Sep} />
 
                 <!-- Search -->
-                <div className="relative flex-1 min-w-[150px] max-w-md">
+                <div className="relative flex-1 min-w-[150px]">
                     <div className="absolute left-2 top-1/2 -translate-y-1/2 opacity-50 pointer-events-none" style=${{color:'var(--theme-accent)'}}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                     </div>
@@ -149,6 +130,17 @@
                         </div>
                     `}
                 </div>
+
+                <${Sep} />
+
+                <!-- Right: App Actions -->
+                <div className="flex items-center gap-1">
+                    <${Btn} onClick=${()=>setDark(!dark)} icon=${dark?Icons.Sun:Icons.Moon} title="Toggle Theme" />
+                    <${Btn} onClick=${()=>setSett(true)} icon=${Icons.Settings} title="Settings" />
+                    <${Btn} onClick=${exportData} icon=${Icons.Download} title="Export JSON" />
+                    <${Btn} onClick=${()=>{const i=document.createElement('input');i.type='file';i.accept='.json';i.onchange=e=>{const f=e.target.files[0];if(f){const r=new FileReader();r.onload=ev=>{setImpD(JSON.parse(ev.target.result));setImp(true);};r.readAsText(f);}};i.click();}} icon=${Icons.Upload} title="Import JSON" />
+                </div>
+
             </div>
         `;
     };

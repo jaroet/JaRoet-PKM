@@ -4,7 +4,7 @@
     const { db, getTopology, createNote, updateNote, deleteNote, getFavorites, toggleFavorite, seedDatabase, getNote, getAllNotes, importNotes, getHomeNoteId, searchNotes, getFontSize, getNoteCount, getVaultList, getCurrentVaultName, switchVault, getAppTheme, getSectionVisibility, findNoteByTitle, getNoteTitlesByPrefix } = J.Services.DB;
     const { goToDate, goToToday, getDateSubtitle } = J.Services.Journal; 
     const { createRenderer, wikiLinkExtension } = J.Services.Markdown;
-    const { NoteCard, LinkerModal, Editor, SettingsModal, ImportModal, RenameModal, NoteSection, TopBar, StatusBar, Icons, AllNotesModal, APP_VERSION } = J;
+    const { NoteCard, LinkerModal, Editor, SettingsModal, ImportModal, RenameModal, NoteSection, TopBar, StatusBar, Icons, AllNotesModal, VaultChooser, APP_VERSION } = J;
     const { useHistory } = J.Hooks;
 
     marked.use({renderer:createRenderer({clickableCheckboxes:false}),extensions:[wikiLinkExtension]});
@@ -28,8 +28,9 @@
         const visRef=useRef({showFavorites:true,showContent:true});
         const secIndRef=useRef({up:0,down:0,left:0,right:0,favs:0});
 
-        // UI State
-        const [menu,setMenu]=useState(false),[favDrop,setFavDrop]=useState(false),[vaultMenu,setVaultMenu]=useState(false),[cal,setCal]=useState(false),[calD,setCalD]=useState(new Set());
+        // UI State & Modals (removed `menu` and `setMenu`)
+        const [favDrop,setFavDrop]=useState(false),[cal,setCal]=useState(false),[calD,setCalD]=useState(new Set());
+        const [vaultChooser, setVaultChooser] = useState(false);
         const [search,setSearch]=useState(''),[sRes,setSRes]=useState([]),[sIdx,setSIdx]=useState(0),[sAct,setSAct]=useState(false);
         const [ed,setEd]=useState(false),[edMode,setEdMode]=useState('view'),[lnk,setLnk]=useState(false),[lnkType,setLnkType]=useState('up'),[ren,setRen]=useState(false),[renN,setRenN]=useState(null),[sett,setSett]=useState(false),[imp,setImp]=useState(false),[impD,setImpD]=useState([]),[allNotes,setAllNotes]=useState(false);
         const [prevH,setPrevH]=useState('');
@@ -106,19 +107,37 @@
         const handleLink = async (tid, t) => {
             const focusedNote = getFocusedNote();
             const aid = focusedNote ? focusedNote.id : currentId;
-            if(!aid)return;
+            if (!aid) return;
+
             const doL = async (id) => {
-                const center = await getNote(aid); const target = await getNote(id);
-                if(center.linksTo.includes(id)) await updateNote(aid,{linksTo:center.linksTo.filter(x=>x!==id)});
+                const center = await getNote(aid);
+                const target = await getNote(id);
+                if (!center || !target) return;
+
+                // Unlink any previous relationships to prevent duplicates
+                if (center.linksTo.includes(id)) await updateNote(aid, { linksTo: center.linksTo.filter(x => x !== id) });
                 if(target.linksTo.includes(aid)) await updateNote(id,{linksTo:target.linksTo.filter(x=>x!==aid)});
                 if(center.relatedTo.includes(id)) await updateNote(aid,{relatedTo:center.relatedTo.filter(x=>x!==id)});
                 if(target.relatedTo.includes(aid)) await updateNote(id,{relatedTo:target.relatedTo.filter(x=>x!==aid)});
+
+                // Apply the new link
                 if(lnkType==='up'){ const trg=await getNote(id); await updateNote(id,{linksTo:[...trg.linksTo,aid]}); }
                 else if(lnkType==='down'){ const anc=await getNote(aid); await updateNote(aid,{linksTo:[...anc.linksTo,id]}); }
                 else { const anc=await getNote(aid); await updateNote(aid,{relatedTo:[...anc.relatedTo,id]}); const trg=await getNote(id); await updateNote(id,{relatedTo:[...trg.relatedTo,aid]}); }
             };
-            if(!tid&&t){ if(t.includes(';')){ for(const tt of t.split(';').map(x=>x.trim()).filter(Boolean)){ const n=await createNote(tt); await doL(n.id); } } else { const n=await createNote(t); await doL(n.id); } } 
-            else if(tid) await doL(tid);
+
+            if (tid) { await doL(tid); } 
+            else if (t) {
+                for (let title of t.split(';').map(x => x.trim()).filter(Boolean)) {
+                    if (title.startsWith(', ')) {
+                        const sourceNote = await getNote(aid);
+                        if (sourceNote) title = `${sourceNote.title} ${title.substring(2)}`.trim();
+                    }
+                    let noteToLink = await findNoteByTitle(title);
+                    if (!noteToLink) noteToLink = await createNote(title);
+                    await doL(noteToLink.id);
+                }
+            }
             if(currentId) getTopology(currentId).then(setTopo); getNoteCount().then(setCount);
         };
 
@@ -163,9 +182,9 @@
         // --- KEYBOARD HANDLER ---
         const handleGlobalKeyDown = useCallback(async (e) => {
             const selState=selRef.current, fSecState=fSecRef.current, fIdxState=fIdxRef.current, topoState=topoRef.current, favsState=favsRef.current, visState=visRef.current, secIndState=secIndRef.current;
-            if (ren||ed||lnk||sett||imp||menu||cal||favDrop||allNotes) { if (e.key === 'Escape') { if(menu) setMenu(false); if(cal) setCal(false); if(favDrop) setFavDrop(false); if(allNotes) setAllNotes(false); } return; }
+            if (ren||ed||lnk||sett||imp||cal||favDrop||allNotes||vaultChooser) { if (e.key === 'Escape') { if(cal) setCal(false); if(favDrop) setFavDrop(false); if(allNotes) setAllNotes(false); if(vaultChooser) setVaultChooser(false); } return; }
             if (sAct) {
-                if (e.key==='Escape') { setSAct(false); e.preventDefault(); return; }
+                if (e.key==='Escape') { setSAct(false); setFSec('center'); e.preventDefault(); return; }
                 if (e.key==='ArrowDown') { e.preventDefault(); setSIdx(p=>(p+1)%sRes.length); return; }
                 if (e.key==='ArrowUp') { e.preventDefault(); setSIdx(p=>(p-1+sRes.length)%sRes.length); return; }
                 if (e.key==='Enter') { e.preventDefault(); if(sRes[sIdx]) { navSearch(sRes[sIdx].id); } return; }
@@ -234,7 +253,7 @@
                 else if(fSecState==='up'){ setFSec('right'); setFIdx(Math.min(secIndState.right, topo.righters.length-1)); }
                 else if(fSecState==='down'){ if(vis.showContent){ setFSec('content'); } else if(topo.righters.length){ setFSec('right'); setFIdx(Math.min(secIndState.right, topo.righters.length-1)); } }
             }
-        }, [currentId, back, forward, sRes, sIdx, sAct, ren, ed, lnk, sett, imp, menu, cal, favDrop]);
+        }, [currentId, back, forward, sRes, sIdx, sAct, ren, ed, lnk, sett, imp, cal, favDrop]);
 
         const handleKeyDownRef = useRef(handleGlobalKeyDown);
         useEffect(() => { handleKeyDownRef.current = handleGlobalKeyDown; }, [handleGlobalKeyDown]);
@@ -242,20 +261,25 @@
 
         return html`
             <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground font-sans flex-col">
-                <${TopBar} 
-                    menu=${menu} setMenu=${setMenu} nav=${nav} back=${back} forward=${forward} canBack=${canBack} canForward=${canForward} goHome=${async()=>{nav(await getHomeNoteId())}}
+                <${TopBar}
+                    nav=${nav} back=${back} forward=${forward} canBack=${canBack} canForward=${canForward} goHome=${async()=>{nav(await getHomeNoteId())}}
                     cal=${cal} setCal=${setCal} calD=${calD} setCalD=${setCalD} handleCalendarSelect=${async(d)=>{setCal(false);nav(await goToDate(d))}} handleCalendarMonthChange=${async(y,m)=>{const p=`${y}-${String(m).padStart(2,'0')}-`;setCalD(new Set(await getNoteTitlesByPrefix(p)))}}
                     favDrop=${favDrop} setFavDrop=${setFavDrop} favs=${favs}
                     activeNote=${activeNote} handleFavToggle=${handleFavToggle} setEd=${setEd} activeHasContent=${activeHasContent} setRenN=${setRenN} setRen=${setRen}
                     deleteNote=${deleteNote} currentId=${currentId} canUnlink=${canUnlink} changeRelationship=${changeRelationship} handleLinkAction=${handleLinkAction}
                     search=${search} doSearch=${doSearch} sAct=${sAct} setSAct=${setSAct} sRes=${sRes} sIdx=${sIdx} setSIdx=${setSIdx} navSearch=${navSearch}
-                    vaultMenu=${vaultMenu} setVaultMenu=${setVaultMenu} setAllNotes=${setAllNotes}
+                    setAllNotes=${setAllNotes}
                     setDark=${setDark} dark=${dark} setSett=${setSett} exportData=${exportData} setImpD=${setImpD} setImp=${setImp} fontSize=${fs}
                 />
 
                 <!-- Canvas -->
-                <div className="flex-1 bg-background p-3 overflow-hidden outline-none relative transition-colors duration-300">
-                    <div className="flex h-full w-full gap-3">
+                <div 
+                    className="flex-1 bg-background p-3 overflow-hidden outline-none relative transition-colors duration-300"
+                    onClick=${(e) => {
+                        if (e.target === e.currentTarget || e.target.classList.contains('canvas-flex-container')) setFSec('center');
+                    }}
+                >
+                    <div className="flex h-full w-full gap-3 canvas-flex-container">
                         <!-- Left Col -->
                         <div className="flex flex-col gap-3 w-1/4">
                             <div className=${`${vis.showFavorites?'flex-1':'h-full'} relative bg-card rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0`}>
@@ -314,11 +338,24 @@
                     </div>
                 </div>
 
-                <${StatusBar} noteCount=${count} vaultName=${getCurrentVaultName()} version=${APP_VERSION} fontSize=${fs} />
+                <${StatusBar} noteCount=${count} vaultName=${getCurrentVaultName()} version=${APP_VERSION} fontSize=${fs} onVaultClick=${() => setVaultChooser(p => !p)} />
 
-                <${Editor} isOpen=${ed} mode=${edMode} note=${fSec==='center'?topo.center:getSortedNotes(fSec,topo,favs)[fIdx]} onClose=${()=>setEd(false)} onSave=${(id,c)=>{updateNote(id,{content:c});if(id===currentId)getTopology(currentId).then(setTopo)}} onLink=${async(t)=>{const n=await findNoteByTitle(t);if(n)nav(n.id)}} />
-                <${LinkerModal} isOpen=${lnk} type=${lnkType} onClose=${()=>setLnk(false)} onSelect=${handleLink} />
-                <${SettingsModal} isOpen=${sett} onClose=${()=>setSett(false)} currentCentralNoteId=${currentId} fontSize=${fs} onFontSizeChange=${setFs} onThemeChange=${()=>setCount(c=>c+1)} onSettingsChange=${()=>getSectionVisibility().then(setVis)} />
+                <${Editor} 
+                    isOpen=${ed} mode=${edMode} note=${fSec==='center'?topo.center:getSortedNotes(fSec,topo,favs)[fIdx]} 
+                    onClose=${()=>setEd(false)} 
+                    onSave=${async (id,c)=>{await updateNote(id,{content:c});if(id===currentId)await getTopology(currentId).then(setTopo)}} 
+                    onLink=${async(t)=>{const n=await findNoteByTitle(t);if(n)nav(n.id)}} 
+                />
+                <${VaultChooser} 
+                    isOpen=${vaultChooser} 
+                    onClose=${() => setVaultChooser(false)} 
+                    onManage=${() => {
+                        setVaultChooser(false);
+                        setSett({ open: true, initialTab: 'database', focusOn: 'newVaultInput' });
+                    }}
+                />
+                <${LinkerModal} isOpen=${lnk} type=${lnkType} onClose=${()=>setLnk(false)} onSelect=${handleLink} sourceNoteId=${getFocusedNote()?.id || currentId} />
+                <${SettingsModal} isOpen=${sett.open || sett === true} onClose=${()=>setSett(false)} currentCentralNoteId=${currentId} fontSize=${fs} onFontSizeChange=${setFs} onThemeChange=${()=>setCount(c=>c+1)} onSettingsChange=${()=>getSectionVisibility().then(setVis)} initialTab=${sett.initialTab} focusOn=${sett.focusOn} />
                 <${ImportModal} isOpen=${imp} importData=${impD} onClose=${()=>setImp(false)} onConfirm=${async m=>{await importNotes(impD,m);setImp(false);window.location.reload()}} />
                 <${RenameModal} isOpen=${ren} currentTitle=${renN?renN.title:''} onClose=${()=>setRen(false)} onRename=${t=>{updateNote(renN.id,{title:t});setRen(false);getTopology(currentId).then(setTopo);}} />
                 <${AllNotesModal} isOpen=${allNotes} onClose=${()=>setAllNotes(false)} onSelect=${id=>{setAllNotes(false);nav(id);}} />

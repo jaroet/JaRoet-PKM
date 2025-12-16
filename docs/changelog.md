@@ -3,6 +3,32 @@
 
 All notable changes to the JaRoet PKM project will be documented in this file.
 
+## [0.3.17] - 2024-12-16
+
+### Improved
+- **Search**: The global search and internal link search now find notes where the search term appears *anywhere* in the title, not just at the beginning.
+- **Linking Workflow**: You can now create compound note titles directly from the linker modal. Typing `, Stores` when linking from a note titled "Sport" will automatically create a new note titled "Sport Stores".
+
+### Changed
+- **UI**: The vault name in the status bar is now underlined to make it clearer that it is a clickable button that opens the vault switcher.
+
+### Fixed
+- **Focus Management**: The application now reliably maintains focus on a note. Focus is correctly returned to the active note after closing the search bar, and clicking on the empty canvas background no longer results in a lost focus state.
+- **Editor Sync**: Fixed a bug where the content preview on the main canvas would not always update immediately after saving changes in the editor.
+- **Autocomplete Scrolling**: The autocomplete list for internal links (`[[...]]`) now correctly scrolls to keep the selected item in view when navigating with arrow keys.
+
+### Refactor
+- **Vault Management**:
+    - Vault switching has been moved from the main menu to a more accessible popup, triggered by clicking the vault name in the status bar.
+    - The new popup includes a "Manage Vaults" option that opens the Settings modal directly to the database tab and focuses the "New Vault" input field.
+- **Top Bar UI**:
+    - The main hamburger menu has been removed.
+    - All actions (Toggle Theme, Settings, Import/Export) are now directly accessible as icons on the right side of the top bar.
+    - The search bar now dynamically expands to fill the remaining space in the top bar.
+- **Note List Layout**: The "Parents" and "Children" note lists now use a more dynamic grid layout. Columns are wider when there are fewer notes, making better use of space and improving title readability.
+
+---
+
 ## [0.3.16] - 2024-05-25
 
 ### Improved

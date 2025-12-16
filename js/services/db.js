@@ -52,7 +52,15 @@
     const setSectionVisibility=(k,v)=>db.meta.put({key:`ui_${k}`,value:v});
     const getAppTheme=async()=>(await db.meta.get('appTheme'))?.value||{light:{background:'#f1f5f9',section:'#ffffff',accent:'#3b82f6',bars:'#e2e8f0'},dark:{background:'#1e293b',section:'#0f172a',accent:'#60a5fa',bars:'#0f172a'}};
     const setAppTheme=(v)=>db.meta.put({key:'appTheme',value:v});
-    const searchNotes=async(q)=>!q?[]:(await db.notes.where('title').startsWithIgnoreCase(q).limit(50).toArray()).map(n=>({id:n.id,title:n.title}));
+    const searchNotes = async (q) => {
+        if (!q) return [];
+        const lowerCaseQuery = q.toLowerCase();
+        // Dexie doesn't have an indexed 'contains' query.
+        // We use a filter function which is powerful but may be slower on very large datasets.
+        // This is a good trade-off for improved search usability.
+        const results = await db.notes.filter(note => note.title.toLowerCase().includes(lowerCaseQuery)).limit(50).toArray();
+        return results.map(n => ({ id: n.id, title: n.title }));
+    };
     const getAllNotes=()=>db.notes.toArray();
     const getAllNotesSortedBy=async(field)=>db.notes.orderBy(field).reverse().toArray();
     
