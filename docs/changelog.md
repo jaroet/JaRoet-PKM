@@ -3,151 +3,49 @@
 
 All notable changes to the JaRoet PKM project will be documented in this file.
 
-## [0.3.17] - 2024-12-16
+## [0.4.0] - 2024-12-17
+
+### Features
+- **Settings Overhaul**: The Settings modal has been completely redesigned with a tabbed interface (General, Theme, Database), an advanced theme editor, home note search, and direct vault management controls.
+- **Navigation History**: Added browser-style Back (`<`) and Forward (`>`) navigation with `Alt+Left`/`Alt+Right` hotkeys.
+- **"All Notes" Modal**: A new modal to view all notes in the vault, with options to sort by creation or modification date.
 
 ### Improved
-- **Search Relevance**: Implemented a scoring system to rank search results, ensuring the most probable notes appear at the top. For example, a search for "store" will now correctly rank "Sport Stores" higher than a longer note that happens to contain the word. The scoring is based on a set of heuristics:
-    - **Starts with query**: A note title that starts with the search term gets a large score bonus.
-    - **Whole word match**: Matching a complete word (e.g., "store" vs. "stores") receives a significant bonus.
-    - **Match position**: Matches closer to the beginning of the title are scored higher.
-    - **Title length**: Shorter, more specific titles are favored over longer ones.
+- **Search Relevance**: Implemented a scoring system to rank search results, ensuring the most probable notes appear at the top. The scoring is based on a set of heuristics like matching the start of a title, whole word matches, match position, and title length.
 - **Linking Workflow**: You can now create compound note titles directly from the linker modal. Typing `, Stores` when linking from a note titled "Sport" will automatically create a new note titled "Sport Stores".
+- **Visuals:** Restored the accent color to top bar icons. Icons now consistently use the user-defined theme accent color (default blue), with inactive toggles fading to gray.
+- **Status Bar:** 
+    - Increased font size for better readability.
+    - Updated layout to `Notes: XXX | <vaultname> | <version>` for clarity.
+    - The version number is now a clickable link pointing to the GitHub releases page.
 
 ### Changed
 - **UI**: The vault name in the status bar is now underlined to make it clearer that it is a clickable button that opens the vault switcher.
+- **Calendar UI**: Refined the visual design of the calendar dropdown for a cleaner look and better legibility. The calendar week now starts on Monday.
 
 ### Fixed
 - **Focus Management**: The application now reliably maintains focus on a note. Focus is correctly returned to the active note after closing the search bar, and clicking on the empty canvas background no longer results in a lost focus state.
 - **Editor Sync**: Fixed a bug where the content preview on the main canvas would not always update immediately after saving changes in the editor.
-- **Autocomplete Scrolling**: The autocomplete list for internal links (`[[...]]`) now correctly scrolls to keep the selected item in view when navigating with arrow keys.
+- **Autocomplete & Search Scrolling**: The autocomplete list for internal links (`[[...]]`) and the main search results now correctly scroll to keep the selected item in view when navigating with arrow keys.
+- **Unlink Logic**: The "Unlink" button in the top bar now correctly enables when a *single* note is focused in a relational section (Parents, Children, or Related).
+- **Calendar Visibility**: Fixed issues where calendar indicators for dates with notes were too faint or invisible.
+- **Build & Dependencies**: Resolved various issues related to the split-file build process, ensuring the application runs correctly as a multi-file deployment.
 
-### Refactor
+### Refactor (Major Architectural Changes)
+- **Modular Architecture**: The application has been refactored from a single monolithic file into a modular structure with dedicated components, services, and hooks. This includes:
+    - **Component Extraction**: `TopBar`, `StatusBar`, `NoteSection`, and other UI elements are now separate components.
+    - **Service Layer**: Logic for the database (`db.js`), journaling (`journal.js`), and Markdown rendering (`markdown.js`) has been centralized.
+    - **Build Process**: The architecture now supports both a multi-file structure for development and a single-file build for distribution.
 - **Vault Management**:
     - Vault switching has been moved from the main menu to a more accessible popup, triggered by clicking the vault name in the status bar.
     - The new popup includes a "Manage Vaults" option that opens the Settings modal directly to the database tab and focuses the "New Vault" input field.
 - **Top Bar UI**:
     - The main hamburger menu has been removed.
-    - All actions (Toggle Theme, Settings, Import/Export) are now directly accessible as icons on the right side of the top bar.
+    - All primary actions are now directly accessible as icons on the right side of the top bar.
     - The search bar now dynamically expands to fill the remaining space in the top bar.
 - **Note List Layout**: The "Parents" and "Children" note lists now use a more dynamic grid layout. Columns are wider when there are fewer notes, making better use of space and improving title readability.
 
 ---
-
-## [0.3.16] - 2024-05-25
-
-### Improved
-- **All Notes Modal:** Created a All Notes list with the option to sort descending on createdDate or modifiedDate.
-
-## [0.3.15] - 2024-05-25
-
-### Changed
-- Version bump for release.
-
-## [0.3.14] - 2024-05-24
-
-### Fixed
-- **Search Dropdown Navigation:** Fixed an issue where the search result list would not scroll to follow the selected item when navigating with the Up/Down arrow keys.
-
-## [0.3.13] - 2024-05-24
-
-### Improved
-- **Visuals:** Restored the accent color to top bar icons. Icons now consistently use the user-defined theme accent color (default blue), with inactive toggles fading to gray.
-- **Status Bar:** 
-    - Increased font size for better readability.
-    - Updated layout to `Notes: XXX | <vaultname> | <version>`.
-    - The version number is now a clickable link pointing to the GitHub releases page.
-
-## [0.3.12] - 2024-05-24
-
-### Refactor
-- **Component Extraction:** Extracted `TopBar` and `StatusBar` from `App.js` into their own component files for better modularity and maintainability.
-- **CSS Extraction:** Moved all application styles from `index.html` into a dedicated `dist/css/style.css` file.
-- **UI Polish:** 
-    - Updated `TopBar` and `StatusBar` to use the theme's bar color variable (`--theme-bars`) consistently.
-    - Added subtle borders (`border-b` for TopBar, `border-t` for StatusBar) to create better visual separation from the canvas.
-    - Improved vertical alignment of icons and text in the top navigation.
-
-## [0.3.11] - 2024-05-24
-
-### Refactor (Major)
-- **Modular Architecture:** The monolithic `App.js` in the distribution build has been split into smaller, maintainable modules to improve code organization and readability.
-    - **`js/components/NoteSection.js`**: Handles the rendering of note lists.
-    - **`js/hooks/useHistory.js`**: Reusable hook for navigation history management.
-    - **`js/globals.js`**: Centralized namespace management.
-    - **`index.html`**: Updated to load these modules in the correct dependency order.
-
-### Features
-- **Settings Overhaul:** The Settings modal has been completely redesigned to match the full feature set of the development version.
-    - **Tabbed Interface**: Organized into General, Theme, and Database tabs.
-    - **Advanced Theme Editor**: Fine-grained control over colors (Background, Section, Bars, Accent) for both Light and Dark modes.
-    - **Home Note Search**: Added a search bar to easily find and set your specific Home note.
-    - **Vault Management**: New UI controls to create new vaults and reset or delete the current one directly from settings.
-
-### Fixed
-- **Unlink Logic:** The "Unlink" button in the top bar now correctly enables when a *single* note is focused in a relational section (Parents, Children, or Related). Previously, it only activated when multiple notes were explicitly selected via `x`.
-
-## [0.3.9] - 2024-05-23
-
-### Fixed
-- **Release Build:** Fixed a critical syntax error in the `index.html` distribution file caused by incorrect merging of the React application logic.
-- **Dependencies:** Clarified the split between the UI layer (React) and the Logic layer (`jaroet-lib.js`). The App now correctly imports all database and utility functions from the global `window.JaroetLib` namespace.
-
-## [0.3.8] - 2024-05-23
-
-### Refactor
-- **Versioning Strategy:** Decoupled the version number from the main application view (`App.tsx`). The version is now defined in the core library/service. This allows future updates to bump the version number without requiring changes to the UI layer, simplifying the release process for the split-file architecture.
-- **Split-File Support:** Optimized the application to run seamlessly as a 2-file deployment (`index.html` + `jaroet-lib.js`), bypassing single-file generation limits.
-
-## [0.3.7] - 2024-05-23
-
-### Refactor
-- **Library Architecture:** Refactored the monolithic `index.html` into a split architecture. 
-    - **`jaroet-lib.js`**: Contains all heavy logic (Database, Markdown, Journaling).
-    - **`index.html`**: Contains the React UI and references the external library.
-    - Added a **Web-based Builder** (`builder.html`) to merge these two files back into a standalone single-file app if desired.
-
-## [0.3.6] - 2024-05-23
-
-### Refactor
-- **Codebase Clean-up**: Centralized logic for Markdown rendering and Date handling into shared services. This eliminates code duplication between the main view and the editor, ensuring consistent link styling and behavior.
-- **Standalone Build**: Updated the monolithic release build to include the new shared architecture.
-
-## [0.3.5] - 2024-05-23
-
-### Features
-- **Navigation History:** Added browser-style Back and Forward navigation to the app.
-    - **History Stack:** The app now remembers your navigation path (up to 50 items).
-    - **UI Buttons:** Added Back (`<`) and Forward (`>`) buttons to the top bar, which enable/disable based on history availability.
-    - **Hotkeys:** 
-        - `Alt + Left`: Navigate Back.
-        - `Alt + Right`: Navigate Forward.
-
-## [0.3.4] - 2024-05-23
-
-### Fixed
-- **Calendar Visibility:** Fixed an issue where the calendar indicators for future dates or non-today entries were too faint or invisible. The indicator line is now a solid accent color for all dates that contain a note, regardless of whether it is "Today" or not.
-
-## [0.3.3] - 2024-05-23
-
-### Changed
-- **Calendar UI:** Refined the visual design of the calendar dropdown. 
-    - Today's date is now highlighted with **accent-colored text** (instead of a background pill) for a cleaner look.
-    - The "has note" indicator is now a distinct line at the bottom of the cell, separated from the number to improve legibility.
-    - Increased day cell size for better touch targets and spacing.
-- **Version:** Bumped version number to 0.3.3.
-
-## [0.3.2] - 2024-05-23
-
-### Fixed
-- **Calendar:** Fixed an issue where days with existing entries were not being underlined in the calendar dropdown. This was due to an over-optimized database query. Reverted to a robust `toArray()` fetch to ensure data consistency.
-- **UI Adjustment:** Increased the visibility of the calendar date indicators (made them larger and explicitly blue) to improve readability.
-
-## [0.3.1] - 2024-05-23
-
-### Changed
-- **Calendar Logic:** Changed the calendar week start from Sunday to Monday for better alignment with international standards.
-- **UI Adjustment:** Adjusted the positioning of the Calendar Dropdown to anchor to the left of the button, ensuring it expands into the screen rather than off the left edge.
-- **Version:** Bumped version number to 0.3.1.
 
 ## [0.3.0] - 2024-05-23
 
