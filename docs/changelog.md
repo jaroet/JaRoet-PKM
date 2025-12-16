@@ -3,7 +3,7 @@
 
 All notable changes to the JaRoet PKM project will be documented in this file.
 
-## [0.3.16] - 2024-05-25
+## [0.3.17] - 2024-12-16
 
 ### Improved
 - **Search**: The global search and internal link search now find notes where the search term appears *anywhere* in the title, not just at the beginning.
