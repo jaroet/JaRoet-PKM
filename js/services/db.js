@@ -53,13 +53,35 @@
     const getAppTheme=async()=>(await db.meta.get('appTheme'))?.value||{light:{background:'#f1f5f9',section:'#ffffff',accent:'#3b82f6',bars:'#e2e8f0'},dark:{background:'#1e293b',section:'#0f172a',accent:'#60a5fa',bars:'#0f172a'}};
     const setAppTheme=(v)=>db.meta.put({key:'appTheme',value:v});
     const searchNotes = async (q) => {
-        if (!q) return [];
-        const lowerCaseQuery = q.toLowerCase();
-        // Dexie doesn't have an indexed 'contains' query.
-        // We use a filter function which is powerful but may be slower on very large datasets.
-        // This is a good trade-off for improved search usability.
-        const results = await db.notes.filter(note => note.title.toLowerCase().includes(lowerCaseQuery)).limit(50).toArray();
-        return results.map(n => ({ id: n.id, title: n.title }));
+        const query = q.trim();
+        if (!query) return [];
+        const lowerCaseQuery = query.toLowerCase();
+    
+        const allNotes = await db.notes.toArray();
+        const scoredResults = [];
+    
+        for (const note of allNotes) {
+            const lowerCaseTitle = note.title.toLowerCase();
+            const matchIndex = lowerCaseTitle.indexOf(lowerCaseQuery);
+    
+            if (matchIndex !== -1) {
+                let score = 0;
+                // 1. Big bonus for starting with the query
+                if (matchIndex === 0) score += 100;
+                // 2. Bonus for being a whole word match
+                // Escape special regex characters from the query
+                const escapedQuery = lowerCaseQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const wordBoundaryRegex = new RegExp(`\\b${escapedQuery}\\b`);
+                if (wordBoundaryRegex.test(lowerCaseTitle)) score += 50;
+                // 3. Score based on position (higher score for earlier match)
+                score += 10 / (matchIndex + 1);
+                // 4. Score based on title length (higher score for shorter titles)
+                score += 10 / note.title.length;
+
+                scoredResults.push({ id: note.id, title: note.title, score: score });
+            }
+        }
+        return scoredResults.sort((a, b) => b.score - a.score).slice(0, 200);
     };
     const getAllNotes=()=>db.notes.toArray();
     const getAllNotesSortedBy=async(field)=>db.notes.orderBy(field).reverse().toArray();
