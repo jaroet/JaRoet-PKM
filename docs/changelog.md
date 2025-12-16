@@ -6,7 +6,11 @@ All notable changes to the JaRoet PKM project will be documented in this file.
 ## [0.3.17] - 2024-12-16
 
 ### Improved
-- **Search**: The global search and internal link search now find notes where the search term appears *anywhere* in the title, not just at the beginning.
+- **Search Relevance**: Implemented a scoring system to rank search results, ensuring the most probable notes appear at the top. For example, a search for "store" will now correctly rank "Sport Stores" higher than a longer note that happens to contain the word. The scoring is based on a set of heuristics:
+    - **Starts with query**: A note title that starts with the search term gets a large score bonus.
+    - **Whole word match**: Matching a complete word (e.g., "store" vs. "stores") receives a significant bonus.
+    - **Match position**: Matches closer to the beginning of the title are scored higher.
+    - **Title length**: Shorter, more specific titles are favored over longer ones.
 - **Linking Workflow**: You can now create compound note titles directly from the linker modal. Typing `, Stores` when linking from a note titled "Sport" will automatically create a new note titled "Sport Stores".
 
 ### Changed
