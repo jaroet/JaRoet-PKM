@@ -4,7 +4,7 @@
     const { db, getTopology, createNote, updateNote, deleteNote, getFavorites, toggleFavorite, seedDatabase, getNote, getAllNotes, importNotes, getHomeNoteId, searchNotes, getFontSize, getNoteCount, getVaultList, getCurrentVaultName, switchVault, getAppTheme, getSectionVisibility, findNoteByTitle, getNoteTitlesByPrefix } = J.Services.DB;
     const { goToDate, goToToday, getDateSubtitle } = J.Services.Journal; 
     const { createRenderer, wikiLinkExtension } = J.Services.Markdown;
-    const { NoteCard, LinkerModal, Editor, SettingsModal, ImportModal, RenameModal, NoteSection, TopBar, StatusBar, Icons, AllNotesModal, APP_VERSION } = J;
+    const { NoteCard, LinkerModal, Editor, SettingsModal, ImportModal, RenameModal, NoteSection, TopBar, StatusBar, Icons, AllNotesModal, VaultChooser, APP_VERSION } = J;
     const { useHistory } = J.Hooks;
 
     marked.use({renderer:createRenderer({clickableCheckboxes:false}),extensions:[wikiLinkExtension]});
@@ -28,8 +28,9 @@
         const visRef=useRef({showFavorites:true,showContent:true});
         const secIndRef=useRef({up:0,down:0,left:0,right:0,favs:0});
 
-        // UI State
-        const [menu,setMenu]=useState(false),[favDrop,setFavDrop]=useState(false),[vaultMenu,setVaultMenu]=useState(false),[cal,setCal]=useState(false),[calD,setCalD]=useState(new Set());
+        // UI State & Modals
+        const [menu,setMenu]=useState(false),[favDrop,setFavDrop]=useState(false),[cal,setCal]=useState(false),[calD,setCalD]=useState(new Set());
+        const [vaultChooser, setVaultChooser] = useState(false);
         const [search,setSearch]=useState(''),[sRes,setSRes]=useState([]),[sIdx,setSIdx]=useState(0),[sAct,setSAct]=useState(false);
         const [ed,setEd]=useState(false),[edMode,setEdMode]=useState('view'),[lnk,setLnk]=useState(false),[lnkType,setLnkType]=useState('up'),[ren,setRen]=useState(false),[renN,setRenN]=useState(null),[sett,setSett]=useState(false),[imp,setImp]=useState(false),[impD,setImpD]=useState([]),[allNotes,setAllNotes]=useState(false);
         const [prevH,setPrevH]=useState('');
@@ -181,7 +182,7 @@
         // --- KEYBOARD HANDLER ---
         const handleGlobalKeyDown = useCallback(async (e) => {
             const selState=selRef.current, fSecState=fSecRef.current, fIdxState=fIdxRef.current, topoState=topoRef.current, favsState=favsRef.current, visState=visRef.current, secIndState=secIndRef.current;
-            if (ren||ed||lnk||sett||imp||menu||cal||favDrop||allNotes) { if (e.key === 'Escape') { if(menu) setMenu(false); if(cal) setCal(false); if(favDrop) setFavDrop(false); if(allNotes) setAllNotes(false); } return; }
+            if (ren||ed||lnk||sett||imp||menu||cal||favDrop||allNotes||vaultChooser) { if (e.key === 'Escape') { if(menu) setMenu(false); if(cal) setCal(false); if(favDrop) setFavDrop(false); if(allNotes) setAllNotes(false); if(vaultChooser) setVaultChooser(false); } return; }
             if (sAct) {
                 if (e.key==='Escape') { setSAct(false); setFSec('center'); e.preventDefault(); return; }
                 if (e.key==='ArrowDown') { e.preventDefault(); setSIdx(p=>(p+1)%sRes.length); return; }
@@ -267,7 +268,7 @@
                     activeNote=${activeNote} handleFavToggle=${handleFavToggle} setEd=${setEd} activeHasContent=${activeHasContent} setRenN=${setRenN} setRen=${setRen}
                     deleteNote=${deleteNote} currentId=${currentId} canUnlink=${canUnlink} changeRelationship=${changeRelationship} handleLinkAction=${handleLinkAction}
                     search=${search} doSearch=${doSearch} sAct=${sAct} setSAct=${setSAct} sRes=${sRes} sIdx=${sIdx} setSIdx=${setSIdx} navSearch=${navSearch}
-                    vaultMenu=${vaultMenu} setVaultMenu=${setVaultMenu} setAllNotes=${setAllNotes}
+                    setAllNotes=${setAllNotes}
                     setDark=${setDark} dark=${dark} setSett=${setSett} exportData=${exportData} setImpD=${setImpD} setImp=${setImp} fontSize=${fs}
                 />
 
@@ -337,7 +338,7 @@
                     </div>
                 </div>
 
-                <${StatusBar} noteCount=${count} vaultName=${getCurrentVaultName()} version=${APP_VERSION} fontSize=${fs} />
+                <${StatusBar} noteCount=${count} vaultName=${getCurrentVaultName()} version=${APP_VERSION} fontSize=${fs} onVaultClick=${() => setVaultChooser(p => !p)} />
 
                 <${Editor} 
                     isOpen=${ed} mode=${edMode} note=${fSec==='center'?topo.center:getSortedNotes(fSec,topo,favs)[fIdx]} 
@@ -345,8 +346,16 @@
                     onSave=${async (id,c)=>{await updateNote(id,{content:c});if(id===currentId)await getTopology(currentId).then(setTopo)}} 
                     onLink=${async(t)=>{const n=await findNoteByTitle(t);if(n)nav(n.id)}} 
                 />
+                <${VaultChooser} 
+                    isOpen=${vaultChooser} 
+                    onClose=${() => setVaultChooser(false)} 
+                    onManage=${() => {
+                        setVaultChooser(false);
+                        setSett({ open: true, initialTab: 'database', focusOn: 'newVaultInput' });
+                    }}
+                />
                 <${LinkerModal} isOpen=${lnk} type=${lnkType} onClose=${()=>setLnk(false)} onSelect=${handleLink} sourceNoteId=${getFocusedNote()?.id || currentId} />
-                <${SettingsModal} isOpen=${sett} onClose=${()=>setSett(false)} currentCentralNoteId=${currentId} fontSize=${fs} onFontSizeChange=${setFs} onThemeChange=${()=>setCount(c=>c+1)} onSettingsChange=${()=>getSectionVisibility().then(setVis)} />
+                <${SettingsModal} isOpen=${sett.open || sett === true} onClose=${()=>setSett(false)} currentCentralNoteId=${currentId} fontSize=${fs} onFontSizeChange=${setFs} onThemeChange=${()=>setCount(c=>c+1)} onSettingsChange=${()=>getSectionVisibility().then(setVis)} initialTab=${sett.initialTab} focusOn=${sett.focusOn} />
                 <${ImportModal} isOpen=${imp} importData=${impD} onClose=${()=>setImp(false)} onConfirm=${async m=>{await importNotes(impD,m);setImp(false);window.location.reload()}} />
                 <${RenameModal} isOpen=${ren} currentTitle=${renN?renN.title:''} onClose=${()=>setRen(false)} onRename=${t=>{updateNote(renN.id,{title:t});setRen(false);getTopology(currentId).then(setTopo);}} />
                 <${AllNotesModal} isOpen=${allNotes} onClose=${()=>setAllNotes(false)} onSelect=${id=>{setAllNotes(false);nav(id);}} />

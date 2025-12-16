@@ -1,6 +1,6 @@
 
 (function(J) {
-    const { useState, useEffect } = React;
+    const { useState, useEffect, useRef } = React;
     const { 
         getHomeNoteId, getNote, getSectionVisibility, getAppTheme, 
         createVault, deleteCurrentVault, resetCurrentVault, 
@@ -8,9 +8,9 @@
         setSectionVisibility, getCurrentVaultName, searchNotes 
     } = J.Services.DB;
 
-    J.SettingsModal = ({isOpen, onClose, currentCentralNoteId, fontSize, onFontSizeChange, onThemeChange, onSettingsChange}) => {
+    J.SettingsModal = ({isOpen, onClose, currentCentralNoteId, fontSize, onFontSizeChange, onThemeChange, onSettingsChange, initialTab, focusOn}) => {
         // State
-        const [tab, setTab] = useState('general');
+        const [tab, setTab] = useState(initialTab || 'general');
         const [themeMode, setThemeMode] = useState('dark');
         const [homeTitle, setHomeTitle] = useState('Loading...');
         const [q, setQ] = useState('');
@@ -23,6 +23,7 @@
         const [confReset, setConfReset] = useState(false);
         const [curVault, setCurVault] = useState('');
         const [dbLocation, setDbLocation] = useState('');
+        const newVaultInputRef = useRef(null);
 
         // Initialize
         useEffect(() => {
@@ -56,7 +57,11 @@
                     }
                     setQ(''); setRes([]);
                     setConfDel(false); setConfReset(false); setNewV('');
-                    setTab('general');
+                    setTab(initialTab || 'general');
+
+                    if (focusOn === 'newVaultInput') {
+                        setTimeout(() => newVaultInputRef.current?.focus(), 100);
+                    }
                 };
                 init();
             }
@@ -248,8 +253,8 @@
                                 <div>
                                     <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">New Vault</h3>
                                     <div className="flex gap-2">
-                                        <input type="text" placeholder="Vault Name..." className="flex-1 p-2 rounded border border-gray-300 dark:border-gray-700 bg-background outline-none focus:ring-1 focus:ring-primary"
-                                            value=${newV} onChange=${e => setNewV(e.target.value)} onKeyDown=${e => e.key === 'Enter' && newV.trim() && createVault(newV)} />
+                                        <input ref=${newVaultInputRef} type="text" placeholder="Vault Name..." className="flex-1 p-2 rounded border border-gray-300 dark:border-gray-700 bg-background outline-none focus:ring-1 focus:ring-primary"
+                                            value=${newV} onChange=${e => setNewV(e.target.value)} onKeyDown=${e => e.key === 'Enter' && newV.trim() && createVault(newV.trim())} />
                                         <button onClick=${() => newV.trim() && createVault(newV)} disabled=${!newV.trim()} className="px-3 py-2 bg-primary text-white rounded hover:opacity-90 disabled:opacity-50">Create</button>
                                     </div>
                                 </div>
