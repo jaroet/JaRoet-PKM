@@ -123,7 +123,12 @@
             if(e.shiftKey&&e.key==='Enter'&&!e.ctrlKey){
                 e.preventDefault();
                 if(prev) onClose();
-                else { onSave(note.id,txt); setPrev(true); setTimeout(()=>prevRef.current?.focus(),50); }
+                else { 
+                    (async () => { 
+                        await onSave(note.id,txt); 
+                        setPrev(true); setTimeout(()=>prevRef.current?.focus(),50); 
+                    })(); 
+                }
                 return;
             }
         };
@@ -144,10 +149,17 @@
                     <div className="flex justify-between items-center p-4 border-b dark:border-gray-700 bg-background/50 rounded-t-lg">
                         <h2 className="text-xl font-bold truncate pr-4">${note.title}</h2>
                         <div className="flex gap-2 flex-shrink-0">
-                            <button onClick=${()=>{if(prev){setPrev(false);setTimeout(()=>ta.current?.focus(),50);}else{onSave(note.id,txt);setPrev(true);setTimeout(()=>prevRef.current?.focus(),50);}}} className="px-3 py-1 rounded bg-gray-200 dark:bg-gray-700 hover:opacity-80 text-sm min-w-[80px]">
+                            <button onClick=${async ()=>{
+                                if(prev){
+                                    setPrev(false);setTimeout(()=>ta.current?.focus(),50);
+                                }else{
+                                    await onSave(note.id,txt);
+                                    setPrev(true);setTimeout(()=>prevRef.current?.focus(),50);
+                                }
+                            }} className="px-3 py-1 rounded bg-gray-200 dark:bg-gray-700 hover:opacity-80 text-sm min-w-[80px]">
                                 ${prev?'Edit':'Preview'}
                             </button>
-                            ${!prev&&html`<button onClick=${()=>{onSave(note.id,txt);onClose()}} className="px-3 py-1 rounded bg-primary text-white hover:opacity-80 text-sm">Save & Close</button>`}
+                            ${!prev&&html`<button onClick=${async ()=>{await onSave(note.id,txt);onClose()}} className="px-3 py-1 rounded bg-primary text-primary-foreground hover:opacity-80 text-sm">Save & Close</button>`}
                             <button onClick=${onClose} className="px-3 py-1 rounded bg-gray-200 dark:bg-gray-700 hover:opacity-80 text-sm">Close</button>
                         </div>
                     </div>

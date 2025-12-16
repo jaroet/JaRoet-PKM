@@ -339,7 +339,12 @@
 
                 <${StatusBar} noteCount=${count} vaultName=${getCurrentVaultName()} version=${APP_VERSION} fontSize=${fs} />
 
-                <${Editor} isOpen=${ed} mode=${edMode} note=${fSec==='center'?topo.center:getSortedNotes(fSec,topo,favs)[fIdx]} onClose=${()=>setEd(false)} onSave=${(id,c)=>{updateNote(id,{content:c});if(id===currentId)getTopology(currentId).then(setTopo)}} onLink=${async(t)=>{const n=await findNoteByTitle(t);if(n)nav(n.id)}} />
+                <${Editor} 
+                    isOpen=${ed} mode=${edMode} note=${fSec==='center'?topo.center:getSortedNotes(fSec,topo,favs)[fIdx]} 
+                    onClose=${()=>setEd(false)} 
+                    onSave=${async (id,c)=>{await updateNote(id,{content:c});if(id===currentId)await getTopology(currentId).then(setTopo)}} 
+                    onLink=${async(t)=>{const n=await findNoteByTitle(t);if(n)nav(n.id)}} 
+                />
                 <${LinkerModal} isOpen=${lnk} type=${lnkType} onClose=${()=>setLnk(false)} onSelect=${handleLink} sourceNoteId=${getFocusedNote()?.id || currentId} />
                 <${SettingsModal} isOpen=${sett} onClose=${()=>setSett(false)} currentCentralNoteId=${currentId} fontSize=${fs} onFontSizeChange=${setFs} onThemeChange=${()=>setCount(c=>c+1)} onSettingsChange=${()=>getSectionVisibility().then(setVis)} />
                 <${ImportModal} isOpen=${imp} importData=${impD} onClose=${()=>setImp(false)} onConfirm=${async m=>{await importNotes(impD,m);setImp(false);window.location.reload()}} />
