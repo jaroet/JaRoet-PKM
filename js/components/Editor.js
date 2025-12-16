@@ -26,7 +26,7 @@
         const [sug,setSug]=useState(false);const [sq,setSq]=useState('');const [sres,setSres]=useState([]);const [sidx,setSidx]=useState(0);
         const [cPos,setCPos]=useState({top:0,left:0});const [trigIdx,setTrigIdx]=useState(-1);
         
-        const ta=useRef(null); const prevRef=useRef(null); const conRef=useRef(null);
+        const ta=useRef(null); const prevRef=useRef(null); const conRef=useRef(null); const sugListRef = useRef(null);
 
         // Initialize
         useEffect(()=>{
@@ -58,6 +58,16 @@
                 return ()=>clearTimeout(t);
             }
         },[sq,sug]);
+
+        // Scroll active autocomplete result into view
+        useEffect(() => {
+            if (sug && sugListRef.current) {
+                const activeEl = sugListRef.current.children[sidx];
+                if (activeEl) {
+                    activeEl.scrollIntoView({ block: 'nearest' });
+                }
+            }
+        }, [sidx, sug]);
 
         const ins=(title)=>{
             const b=txt.slice(0,trigIdx);
@@ -148,7 +158,7 @@
                             <div className="relative w-full h-full">
                                 <textarea ref=${ta} value=${txt} onChange=${handleChange} style=${{fontSize:'15px'}} className="w-full h-full p-6 bg-transparent resize-none outline-none font-mono custom-scrollbar" placeholder="Type markdown here... Use [[ to link." />
                                 ${sug&&html`
-                                    <div className="absolute z-50 w-64 bg-card border border-gray-200 dark:border-gray-700 shadow-xl rounded-md max-h-60 overflow-y-auto" style=${{top:cPos.top+30,left:cPos.left+24}}>
+                                    <div ref=${sugListRef} className="absolute z-50 w-64 bg-card border border-gray-200 dark:border-gray-700 shadow-xl rounded-md max-h-60 overflow-y-auto custom-scrollbar" style=${{top:cPos.top+30,left:cPos.left+24}}>
                                         ${sres.length===0?html`<div className="p-2 text-xs text-gray-500 italic">No matching notes</div>`
                                         :sres.map((s,i)=>html`<div key=${s.id} onClick=${()=>ins(s.title)} className=${`px-3 py-2 text-sm cursor-pointer ${i===sidx?'bg-primary text-primary-foreground':'hover:bg-gray-100 dark:hover:bg-gray-800'}`}>${s.title}</div>`)}
                                     </div>
