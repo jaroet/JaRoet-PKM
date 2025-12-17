@@ -194,14 +194,21 @@
         }
 
         dirInput.addEventListener('change', (e) => {
-            selectedFiles = Array.from(e.target.files).filter(f => f.name.endsWith('.md'));
+            const allFiles = Array.from(e.target.files);
+            selectedFiles = allFiles.filter(f => f.name.endsWith('.md'));
+            const ignoredFiles = allFiles.filter(f => !f.name.endsWith('.md'));
+
             if (selectedFiles.length > 0) {
                 fileLabel.textContent = `Selected ${selectedFiles.length} Markdown files`;
                 convertBtn.disabled = false;
-                log(`Found ${selectedFiles.length} .md files.`);
+                log(`Found ${selectedFiles.length} Markdown (.md) files to process.`);
+                if (ignoredFiles.length > 0) {
+                    log(`NOTE: ${ignoredFiles.length} other files (like images or PDFs) will be skipped as they are not Markdown notes.`);
+                }
             } else {
                 fileLabel.textContent = "No .md files found in folder";
                 convertBtn.disabled = true;
+                log("No Markdown (.md) files were found in the selected folder.");
             }
         });
 
@@ -375,6 +382,10 @@
                 // This captures files in "Log", "Log/2023", "Log/2023/01", etc.
                 const isJournalFolder = JOURNAL_FOLDER && internalPath.length > 1 && internalPath[0].toLowerCase() === JOURNAL_FOLDER.toLowerCase();
                 
+                if (!internalPath.length || !filename) {
+                    log(`Skipped a file with an invalid path: "${fullPath}". Reason: Could not determine file name or path.`);
+                    continue;
+                }
                 let noteId = crypto.randomUUID();
                 let finalTitle = title; // Default title is filename without .md
                 
@@ -415,6 +426,7 @@
                     }
                     // If not valid date, fall through to standard handling
                 }
+                
 
                 // --- STANDARD FOLDER HANDLING ---
 
