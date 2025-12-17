@@ -70,7 +70,10 @@
                     <div className="relative">
                         <${Btn} onClick=${()=>setFavDrop(!favDrop)} icon=${Icons.FavList} title="Favorites" active=${favDrop} />
                         ${favDrop&&html`
-                            <div className="absolute top-full left-0 mt-2 w-64 bg-card border border-gray-200 dark:border-gray-700 shadow-xl rounded-md z-50 max-h-80 overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
+                            <div 
+                                className="absolute top-full left-0 mt-2 w-64 bg-card border border-gray-200 dark:border-gray-700 shadow-xl rounded-md z-50 max-h-80 overflow-y-auto animate-in fade-in zoom-in-95 duration-100"
+                                onClick=${e => e.stopPropagation()}
+                            >
                                 <div className="p-2 text-xs font-bold uppercase text-gray-500 border-b dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">Favorites</div>
                                 ${favs.length===0?html`<div className="p-4 text-center text-sm text-gray-400 italic">No favorites yet</div>`:favs.map(f=>html`<div key=${f.id} onClick=${()=>{nav(f.id);setFavDrop(false)}} className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer text-sm truncate">${f.title}</div>`)}
                             </div>
@@ -131,7 +134,10 @@
                             ${sRes.map((r,i)=>html`
                                 <div 
                                     key=${r.id} 
-                                    onClick=${() => navSearch(r.id)} 
+                                    onMouseDown=${() => {
+                                        navSearch(r.id);
+                                        searchRef.current?.blur();
+                                    }} 
                                     className=${`px-4 py-2 cursor-pointer text-sm flex justify-between ${i===sIdx?'bg-primary text-white':'hover:bg-gray-100 dark:hover:bg-gray-800'}`} 
                                     onMouseEnter=${()=>setSIdx(i)}
                                 >

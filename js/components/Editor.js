@@ -144,8 +144,8 @@
         if(!isOpen||!note)return null;
 
         return html`
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-                <div ref=${conRef} tabIndex=${-1} onKeyDown=${handleKeyDown} className="w-full max-w-[90vw] h-[90vh] bg-card rounded-lg shadow-2xl flex flex-col border border-gray-200 dark:border-gray-800 outline-none relative">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick=${onClose}>
+                <div ref=${conRef} tabIndex=${-1} onKeyDown=${handleKeyDown} onClick=${e => e.stopPropagation()} className="w-full max-w-[90vw] h-[90vh] bg-card rounded-lg shadow-2xl flex flex-col border border-gray-200 dark:border-gray-800 outline-none relative">
                     <div className="flex justify-between items-center p-4 border-b dark:border-gray-700 bg-background/50 rounded-t-lg">
                         <h2 className="text-xl font-bold truncate pr-4">${note.title}</h2>
                         <div className="flex gap-2 flex-shrink-0">
