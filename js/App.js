@@ -36,6 +36,11 @@
         const [prevH,setPrevH]=useState('');
         const searchInputRef=useRef(null);
 
+        // --- DEBUG LOGGING ---
+        useEffect(() => {
+            console.log(`%cSTATE CHANGE: fSec is now '${fSec}'`, 'color: orange');
+        }, [fSec]);
+
         // --- Effects & Sync ---
         useEffect(()=>{seedDatabase().then(id=>{db.meta.get('currentCentralNoteId').then(v=>replace(v?v.value:id));getFontSize().then(setFs);getSectionVisibility().then(setVis);getFavorites().then(setFavs);getNoteCount().then(setCount);});},[]);
         useEffect(()=>{document.documentElement.classList.toggle('dark',dark);},[dark]);
@@ -55,6 +60,7 @@
 
         useEffect(()=>{
             if(currentId){
+                console.log(`%cNAV EVENT: currentId changed to ${currentId}. Resetting state.`, 'color: cyan; font-weight: bold;');
                 getTopology(currentId).then(setTopo);
                 db.meta.put({key:'currentCentralNoteId',value:currentId});
                 setFSec('center');setFIdx(0);setSel(new Set());scrollRef.current={};
@@ -162,7 +168,12 @@
         const handleFavToggle = async () => { const n = getFocusedNote(); if (n) { await toggleFavorite(n.id); setCount(c => c + 1); getTopology(currentId).then(setTopo); getFavorites().then(setFavs); } };
         const getItemsPerColumn = (id) => { const el = document.getElementById(id); if(!el) return 1; const kids = Array.from(el.children).filter(c=>c.id.startsWith('note-')); if(kids.length < 2) return 1; const firstLeft = kids[0].offsetLeft; for(let i=1; i<kids.length; i++) if(kids[i].offsetLeft > firstLeft + 20) return i; return kids.length; };
         const doSearch=async(q)=>{setSearch(q);if(q){setSRes(await searchNotes(q));setSIdx(0);}else setSRes([]);};
-        const navSearch=(id)=>{nav(id);setSAct(false);setSearch('');};
+        const navSearch = (id) => { // This function now only handles search-specific UI state.
+            console.log(`%cSEARCH NAV: navSearch called for id ${id}`, 'color: violet');
+            nav(id);
+            setSAct(false);
+            setSearch('');
+        };
 
         const exportData = async () => {
             const notes = await getAllNotes();
@@ -181,6 +192,7 @@
 
         // --- KEYBOARD HANDLER ---
         const handleGlobalKeyDown = useCallback(async (e) => {
+            console.log(`%cGLOBAL KEYDOWN: key='${e.key}', sAct=${sAct}`, 'color: red');
             const selState=selRef.current, fSecState=fSecRef.current, fIdxState=fIdxRef.current, topoState=topoRef.current, favsState=favsRef.current, visState=visRef.current, secIndState=secIndRef.current;
             if (ren||ed||lnk||sett||imp||cal||favDrop||allNotes||vaultChooser) { if (e.key === 'Escape') { if(cal) setCal(false); if(favDrop) setFavDrop(false); if(allNotes) setAllNotes(false); if(vaultChooser) setVaultChooser(false); } return; }
             if (sAct) {
@@ -343,7 +355,15 @@
                 <${Editor} 
                     isOpen=${ed} mode=${edMode} note=${fSec==='center'?topo.center:getSortedNotes(fSec,topo,favs)[fIdx]} 
                     onClose=${()=>setEd(false)} 
-                    onSave=${async (id,c)=>{await updateNote(id,{content:c});if(id===currentId)await getTopology(currentId).then(setTopo)}} 
+                    onSave=${async (id, c) => {
+                        // Use a transaction to ensure getTopology reads the updated data
+                        await db.transaction('rw', db.notes, async () => {
+                            await updateNote(id, { content: c });
+                            if (id === currentId) {
+                                await getTopology(currentId).then(setTopo);
+                            }
+                        });
+                    }}
                     onLink=${async(t)=>{const n=await findNoteByTitle(t);if(n)nav(n.id)}} 
                 />
                 <${VaultChooser} 

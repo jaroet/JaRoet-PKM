@@ -3,6 +3,14 @@
 
 All notable changes to the JaRoet PKM project will be documented in this file.
 
+## [0.4.1] - 2024-12-18
+
+### Fixed
+- **Search Navigation Bugs**: Resolved a series of complex bugs related to navigating from the search bar. The application now correctly handles focus, state updates, and event propagation, ensuring that all functionality (hotkeys, content previews) works reliably after a search.
+- **Editor Focus**: Fixed a bug where the editor would not correctly receive focus after being opened.
+
+---
+
 ## [0.4.0] - 2024-12-17
 
 ### Features
