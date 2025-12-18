@@ -1,6 +1,6 @@
 
 (function(J) {
-    const { useState, useEffect, useRef, useCallback, useMemo } = React;
+    const { useState, useEffect, useRef, useCallback } = React;
     const { searchNotes } = J.Services.DB;
     const { createRenderer } = J.Services.Markdown;
 
@@ -46,10 +46,11 @@
 
         // Markdown Parsing (Synchronous with marked v9)
         useEffect(()=>{
+            if(!prev) return;
             const renderer = createRenderer({clickableCheckboxes:true});
             const html = marked.parse(txt||'',{breaks:true,gfm:true,renderer});
             setH(html);
-        },[txt]);
+        },[txt, prev]);
 
         // Autocomplete Search
         useEffect(()=>{
@@ -200,7 +201,7 @@
                 const currentLine = val.substring(lineStart, val.indexOf('\n', start) === -1 ? val.length : val.indexOf('\n', start));
 
                 // Only apply to lines that look like list items
-                if (currentLine.trim().startsWith('-')) {
+                if (/^[-*]\s/.test(currentLine.trim())) {
                     e.preventDefault();
                     let newVal, newCursorPos;
                     if (e.shiftKey) { // Outdent
@@ -224,7 +225,7 @@
                 const before = val.substring(0, start);
                 const lineStart = before.lastIndexOf('\n') + 1;
                 const currentLine = before.substring(lineStart);
-                const match = currentLine.match(/^(\s*-\s)(.*)/);
+                const match = currentLine.match(/^(\s*[-*]\s)(.*)/);
                 
                 if(match){
                     e.preventDefault();
