@@ -1,6 +1,6 @@
 
 (function(J) {
-    const { useState, useEffect, useRef } = React;
+    const { useState, useEffect, useRef, useCallback, useMemo } = React;
     const { searchNotes } = J.Services.DB;
     const { createRenderer } = J.Services.Markdown;
 
@@ -23,10 +23,11 @@
     J.Editor = ({note, isOpen, mode, onClose, onSave, onLink}) => {
         const [txt,setTxt]=useState('');const [h,setH]=useState('');const [prev,setPrev]=useState(mode==='view');
         // Autocomplete State
-        const [sug,setSug]=useState(false);const [sq,setSq]=useState('');const [sres,setSres]=useState([]);const [sidx,setSidx]=useState(0);
+        const [sug,setSug]=useState(false);const [sq,setSq]=useState('');const [sres,setSres]=useState([]);
         const [cPos,setCPos]=useState({top:0,left:0});const [trigIdx,setTrigIdx]=useState(-1);
         
-        const ta=useRef(null); const prevRef=useRef(null); const conRef=useRef(null); const sugListRef = useRef(null);
+        const ta=useRef(null); const prevRef=useRef(null); const conRef=useRef(null);
+        const { useClickOutside } = J.Hooks;
 
         // Initialize
         useEffect(()=>{
@@ -52,22 +53,11 @@
         useEffect(()=>{
             if(sug){
                 const t=setTimeout(async()=>{
-                    setSres(await searchNotes(sq));
-                    setSidx(0);
+                    setSres(await searchNotes(sq)); 
                 },150);
                 return ()=>clearTimeout(t);
             }
         },[sq,sug]);
-
-        // Scroll active autocomplete result into view
-        useEffect(() => {
-            if (sug && sugListRef.current) {
-                const activeEl = sugListRef.current.children[sidx];
-                if (activeEl) {
-                    activeEl.scrollIntoView({ block: 'nearest' });
-                }
-            }
-        }, [sidx, sug]);
 
         const ins=(title)=>{
             const b=txt.slice(0,trigIdx);
@@ -98,15 +88,31 @@
             } else { setSug(false); }
         };
 
+        // --- Centralized Hook Usage ---
+        const { useListNavigation } = J.Hooks;
+        const { activeIndex: sidx, setActiveIndex: setSidx, listRef: sugListRef, handleKeyDown: handleAutocompleteKeyDown } = useListNavigation({
+            isOpen: sug,
+            itemCount: sres.length,
+            onEnter: (index) => {
+                if (sres[index]) ins(sres[index].title);
+            },
+            onEscape: () => setSug(false)
+        });
+
+        // Use the click-outside hook for the autocomplete dropdown
+        const autocompleteDropdownRef = useClickOutside(sug, useCallback(() => setSug(false), []));
+
         const handleKeyDown=(e)=>{
             e.stopPropagation(); // Prevent global app listeners
             
             // Autocomplete
-            if(sug&&sres.length>0){
-                if(e.key==='ArrowDown'){e.preventDefault();setSidx((sidx+1)%sres.length);return;}
-                if(e.key==='ArrowUp'){e.preventDefault();setSidx((sidx-1+sres.length)%sres.length);return;}
-                if(e.key==='Enter'||e.key==='Tab'){e.preventDefault();if(sres[sidx])ins(sres[sidx].title);return;}
-                if(e.key==='Escape'){e.preventDefault();setSug(false);return;}
+            if (sug) {
+                // Pass event to the navigation hook. It will preventDefault if it handles the key.
+                handleAutocompleteKeyDown(e);
+                // If the hook handled it, we can stop.
+                if (['ArrowUp', 'ArrowDown', 'Enter', 'Tab', 'Escape'].includes(e.key)) {
+                    return;
+                }
             }
 
             if(e.key==='Escape'){e.preventDefault();onClose();return;}
@@ -170,9 +176,13 @@
                             <div className="relative w-full h-full">
                                 <textarea ref=${ta} value=${txt} onChange=${handleChange} style=${{fontSize:'15px'}} className="w-full h-full p-6 bg-transparent resize-none outline-none font-mono custom-scrollbar" placeholder="Type markdown here... Use [[ to link." />
                                 ${sug&&html`
-                                    <div ref=${sugListRef} className="absolute z-50 w-64 bg-card border border-gray-200 dark:border-gray-700 shadow-xl rounded-md max-h-60 overflow-y-auto custom-scrollbar" style=${{top:cPos.top+30,left:cPos.left+24}}>
+                                    <div ref=${(el) => { autocompleteDropdownRef.current = el; sugListRef.current = el; }} className="absolute z-50 w-64 bg-card border border-gray-200 dark:border-gray-700 shadow-xl rounded-md max-h-60 overflow-y-auto custom-scrollbar" style=${{top:cPos.top+30,left:cPos.left+24}}>
                                         ${sres.length===0?html`<div className="p-2 text-xs text-gray-500 italic">No matching notes</div>`
-                                        :sres.map((s,i)=>html`<div key=${s.id} onClick=${()=>ins(s.title)} className=${`px-3 py-2 text-sm cursor-pointer ${i===sidx?'bg-primary text-primary-foreground':'hover:bg-gray-100 dark:hover:bg-gray-800'}`}>${s.title}</div>`)}
+                                        :sres.map((s,i)=>html`
+                                            <div key=${s.id} onClick=${()=>ins(s.title)} onMouseEnter=${() => setSidx(i)} className=${`px-3 py-2 text-sm cursor-pointer ${i===sidx?'bg-primary text-primary-foreground':'hover:bg-gray-100 dark:hover:bg-gray-800'}`}>
+                                                ${s.title}
+                                            </div>
+                                        `)}
                                     </div>
                                 `}
                             </div>
