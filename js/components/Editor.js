@@ -1,6 +1,6 @@
 
 (function(J) {
-    const { useState, useEffect, useRef } = React;
+    const { useState, useEffect, useRef, useCallback } = React;
     const { searchNotes } = J.Services.DB;
     const { createRenderer } = J.Services.Markdown;
 
@@ -23,10 +23,13 @@
     J.Editor = ({note, isOpen, mode, onClose, onSave, onLink}) => {
         const [txt,setTxt]=useState('');const [h,setH]=useState('');const [prev,setPrev]=useState(mode==='view');
         // Autocomplete State
-        const [sug,setSug]=useState(false);const [sq,setSq]=useState('');const [sres,setSres]=useState([]);const [sidx,setSidx]=useState(0);
+        const [sug,setSug]=useState(false);const [sq,setSq]=useState('');const [sres,setSres]=useState([]);
         const [cPos,setCPos]=useState({top:0,left:0});const [trigIdx,setTrigIdx]=useState(-1);
         
-        const ta=useRef(null); const prevRef=useRef(null); const conRef=useRef(null); const sugListRef = useRef(null);
+        const ta=useRef(null); const prevRef=useRef(null); const conRef=useRef(null);
+        const formatBuffer = useRef('');
+        const formatTimeout = useRef(null);
+        const { useClickOutside } = J.Hooks;
 
         // Initialize
         useEffect(()=>{
@@ -43,31 +46,21 @@
 
         // Markdown Parsing (Synchronous with marked v9)
         useEffect(()=>{
+            if(!prev) return;
             const renderer = createRenderer({clickableCheckboxes:true});
             const html = marked.parse(txt||'',{breaks:true,gfm:true,renderer});
             setH(html);
-        },[txt]);
+        },[txt, prev]);
 
         // Autocomplete Search
         useEffect(()=>{
             if(sug){
                 const t=setTimeout(async()=>{
-                    setSres(await searchNotes(sq));
-                    setSidx(0);
+                    setSres(await searchNotes(sq)); 
                 },150);
                 return ()=>clearTimeout(t);
             }
         },[sq,sug]);
-
-        // Scroll active autocomplete result into view
-        useEffect(() => {
-            if (sug && sugListRef.current) {
-                const activeEl = sugListRef.current.children[sidx];
-                if (activeEl) {
-                    activeEl.scrollIntoView({ block: 'nearest' });
-                }
-            }
-        }, [sidx, sug]);
 
         const ins=(title)=>{
             const b=txt.slice(0,trigIdx);
@@ -98,15 +91,78 @@
             } else { setSug(false); }
         };
 
+        // --- Centralized Hook Usage ---
+        const { useListNavigation } = J.Hooks;
+        const { activeIndex: sidx, setActiveIndex: setSidx, listRef: sugListRef, handleKeyDown: handleAutocompleteKeyDown } = useListNavigation({
+            isOpen: sug,
+            itemCount: sres.length,
+            onEnter: (index) => {
+                if (sres[index]) ins(sres[index].title);
+            },
+            onEscape: () => setSug(false)
+        });
+
+        // Use the click-outside hook for the autocomplete dropdown
+        const autocompleteDropdownRef = useClickOutside(sug, useCallback(() => setSug(false), []));
+
         const handleKeyDown=(e)=>{
             e.stopPropagation(); // Prevent global app listeners
             
             // Autocomplete
-            if(sug&&sres.length>0){
-                if(e.key==='ArrowDown'){e.preventDefault();setSidx((sidx+1)%sres.length);return;}
-                if(e.key==='ArrowUp'){e.preventDefault();setSidx((sidx-1+sres.length)%sres.length);return;}
-                if(e.key==='Enter'||e.key==='Tab'){e.preventDefault();if(sres[sidx])ins(sres[sidx].title);return;}
-                if(e.key==='Escape'){e.preventDefault();setSug(false);return;}
+            if (sug) {
+                // Pass event to the navigation hook. It will preventDefault if it handles the key.
+                handleAutocompleteKeyDown(e);
+                // If the hook handled it, we can stop.
+                if (['ArrowUp', 'ArrowDown', 'Enter', 'Tab', 'Escape'].includes(e.key)) {
+                    return;
+                }
+            }
+
+            // Formatting Shortcuts (Wrap/Unwrap Selection) with Delay
+            if (ta.current && ta.current.selectionStart !== ta.current.selectionEnd) {
+                if (['[', '*'].includes(e.key)) {
+                    e.preventDefault();
+                    const key = e.key;
+
+                    // Reset buffer if key changes
+                    if (formatBuffer.current.length > 0 && formatBuffer.current[0] !== key) {
+                        formatBuffer.current = '';
+                        if (formatTimeout.current) clearTimeout(formatTimeout.current);
+                    }
+
+                    formatBuffer.current += key;
+                    if (formatTimeout.current) clearTimeout(formatTimeout.current);
+
+                    formatTimeout.current = setTimeout(() => {
+                        const buf = formatBuffer.current;
+                        formatBuffer.current = '';
+                        
+                        if (!ta.current) return;
+
+                        const start = ta.current.selectionStart;
+                        const end = ta.current.selectionEnd;
+                        const val = ta.current.value;
+                        const selectedText = val.substring(start, end);
+                        const before = val.substring(0, start);
+                        const after = val.substring(end);
+                        
+                        let syntax = buf;
+                        let closeSyntax = buf;
+
+                        if (buf.startsWith('[')) closeSyntax = buf.replace(/\[/g, ']');
+
+                        if (before.endsWith(syntax) && after.startsWith(closeSyntax)) {
+                            const newBefore = before.substring(0, before.length - syntax.length);
+                            const newAfter = after.substring(closeSyntax.length);
+                            setTxt(newBefore + selectedText + newAfter);
+                            setTimeout(() => { if(ta.current) { ta.current.focus(); ta.current.setSelectionRange(newBefore.length, newBefore.length + selectedText.length); } }, 0);
+                        } else {
+                            setTxt(before + syntax + selectedText + closeSyntax + after);
+                            setTimeout(() => { if(ta.current) { ta.current.focus(); ta.current.setSelectionRange(start + syntax.length, end + syntax.length); } }, 0);
+                        }
+                    }, 200);
+                    return;
+                }
             }
 
             if(e.key==='Escape'){e.preventDefault();onClose();return;}
@@ -130,6 +186,65 @@
                     })(); 
                 }
                 return;
+            }
+
+            // Tab for indent/outdent
+            if (e.key === 'Tab' && !prev && e.target === ta.current) {
+                // The autocomplete hook already handles Tab when the suggestion box is open.
+                // This check prevents indenting when trying to select an autocomplete item.
+                if (sug) return;
+
+                const val = ta.current.value;
+                const start = ta.current.selectionStart;
+                const before = val.substring(0, start);
+                const lineStart = before.lastIndexOf('\n') + 1;
+                const currentLine = val.substring(lineStart, val.indexOf('\n', start) === -1 ? val.length : val.indexOf('\n', start));
+
+                // Only apply to lines that look like list items
+                if (/^[-*]\s/.test(currentLine.trim())) {
+                    e.preventDefault();
+                    let newVal, newCursorPos;
+                    if (e.shiftKey) { // Outdent
+                        newVal = val.substring(0, lineStart) + val.substring(lineStart + 2);
+                        newCursorPos = Math.max(lineStart, start - 2);
+                    } else { // Indent
+                        newVal = val.substring(0, lineStart) + '  ' + val.substring(lineStart);
+                        newCursorPos = start + 2;
+                    }
+                    setTxt(newVal);
+                    setTimeout(() => { if (ta.current) { ta.current.selectionStart = ta.current.selectionEnd = newCursorPos; ta.current.focus(); } }, 0);
+                    return;
+                }
+            }
+
+            // List Continuation
+            if(e.key==='Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !prev && e.target === ta.current){
+                const val = ta.current.value;
+                const start = ta.current.selectionStart;
+                const end = ta.current.selectionEnd;
+                const before = val.substring(0, start);
+                const lineStart = before.lastIndexOf('\n') + 1;
+                const currentLine = before.substring(lineStart);
+                const match = currentLine.match(/^(\s*[-*]\s)(.*)/);
+                
+                if(match){
+                    e.preventDefault();
+                    const prefix = match[1];
+                    const content = match[2];
+                    let newVal, newCursorPos;
+                    
+                    if(!content.trim()){
+                        newVal = val.substring(0, lineStart) + '\n' + val.substring(end);
+                        newCursorPos = lineStart + 1;
+                    } else {
+                        const insertion = '\n' + prefix;
+                        newVal = val.substring(0, start) + insertion + val.substring(end);
+                        newCursorPos = start + insertion.length;
+                    }
+                    setTxt(newVal);
+                    setTimeout(()=>{ if(ta.current){ ta.current.selectionStart = ta.current.selectionEnd = newCursorPos; ta.current.focus(); } }, 0);
+                    return;
+                }
             }
         };
 
@@ -170,9 +285,13 @@
                             <div className="relative w-full h-full">
                                 <textarea ref=${ta} value=${txt} onChange=${handleChange} style=${{fontSize:'15px'}} className="w-full h-full p-6 bg-transparent resize-none outline-none font-mono custom-scrollbar" placeholder="Type markdown here... Use [[ to link." />
                                 ${sug&&html`
-                                    <div ref=${sugListRef} className="absolute z-50 w-64 bg-card border border-gray-200 dark:border-gray-700 shadow-xl rounded-md max-h-60 overflow-y-auto custom-scrollbar" style=${{top:cPos.top+30,left:cPos.left+24}}>
+                                    <div ref=${(el) => { autocompleteDropdownRef.current = el; sugListRef.current = el; }} className="absolute z-50 w-64 bg-card border border-gray-200 dark:border-gray-700 shadow-xl rounded-md max-h-60 overflow-y-auto custom-scrollbar" style=${{top:cPos.top+30,left:cPos.left+24}}>
                                         ${sres.length===0?html`<div className="p-2 text-xs text-gray-500 italic">No matching notes</div>`
-                                        :sres.map((s,i)=>html`<div key=${s.id} onClick=${()=>ins(s.title)} className=${`px-3 py-2 text-sm cursor-pointer ${i===sidx?'bg-primary text-primary-foreground':'hover:bg-gray-100 dark:hover:bg-gray-800'}`}>${s.title}</div>`)}
+                                        :sres.map((s,i)=>html`
+                                            <div key=${s.id} onClick=${()=>ins(s.title)} onMouseEnter=${() => setSidx(i)} className=${`px-3 py-2 text-sm cursor-pointer ${i===sidx?'bg-primary text-primary-foreground':'hover:bg-gray-100 dark:hover:bg-gray-800'}`}>
+                                                ${s.title}
+                                            </div>
+                                        `)}
                                     </div>
                                 `}
                             </div>

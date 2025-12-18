@@ -50,7 +50,7 @@
                     const cv = getCurrentVaultName();
                     setCurVault(cv);
                     try {
-                        const origin = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : 'localhost';
+                        const origin = (typeof window !== 'undefined' && window.location && window.location.origin && window.location.origin !== 'null') ? window.location.origin : 'local-file';
                         setDbLocation(`indexeddb://${origin}/${cv}`);
                     } catch (e) {
                         setDbLocation(`indexeddb://<unknown>/${cv}`);

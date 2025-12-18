@@ -1,6 +1,6 @@
 
 (function(J) {
-    const { useState, useRef, useEffect } = React;
+    const { useState, useRef, useCallback } = React;
     const { Icons, CalendarDropdown, VaultChooser } = J;
     const { deleteNote, getHomeNoteId } = J.Services.DB;
     const { goToDate } = J.Services.Journal;
@@ -12,23 +12,34 @@
             favDrop, setFavDrop, favs,
             activeNote, handleFavToggle, setEd, activeHasContent, setRenN, setRen,
             canUnlink, changeRelationship, handleLinkAction,
-            search, doSearch, sAct, setSAct, sRes, sIdx, setSIdx, navSearch,
+            search, doSearch, sAct, setSAct, sRes, navSearch,
             setDark, dark, setSett, exportData, setImpD, setImp, setAllNotes,
-            fontSize
+            fontSize, sortOrder, setSortOrder
         } = props;
 
         const searchRef = useRef(null);
-        const listRef = useRef(null);
+        const [sortDrop, setSortDrop] = useState(false);
 
-        // Scroll active search result into view
-        useEffect(() => {
-            if (sAct && listRef.current) {
-                const activeEl = listRef.current.children[sIdx];
-                if (activeEl) {
-                    activeEl.scrollIntoView({ block: 'nearest' });
-                }
-            }
-        }, [sIdx, sAct]);
+        const { useClickOutside, useListNavigation } = J.Hooks;
+
+        // Centralized hook for search list navigation
+        const { activeIndex: sIdx, setActiveIndex: setSIdx, listRef, handleKeyDown: handleSearchKeyDown } = useListNavigation({
+            isOpen: sAct && sRes.length > 0,
+            itemCount: sRes.length,
+            onEnter: (index) => {
+                navSearch(sRes[index].id);
+                searchRef.current?.blur();
+            },
+            onEscape: () => setSAct(false)
+        });
+
+        // Use the new hook for click-outside behavior
+        const favDropdownContainerRef = useClickOutside(favDrop, useCallback(() => setFavDrop(false), []));
+        const sortDropdownRef = useClickOutside(sortDrop, useCallback(() => setSortDrop(false), []));
+        const searchDropdownContainerRef = useClickOutside(sAct && sRes.length > 0, useCallback(() => {
+            setSAct(false);
+            searchRef.current?.blur(); // Optionally blur the search input
+        }, []));
 
         // Icon Button Helper
         const Btn = ({ onClick, disabled, active, icon, title, className="", forceColor=true }) => html`
@@ -42,6 +53,15 @@
                 <${icon} />
             </button>
         `;
+
+        const sortOptions = [
+            { id: 'title-asc', label: 'Title (A-Z)' },
+            { id: 'title-desc', label: 'Title (Z-A)' },
+            { id: 'created-desc', label: 'Created (Newest)' },
+            { id: 'created-asc', label: 'Created (Oldest)' },
+            { id: 'modified-desc', label: 'Modified (Newest)' },
+            { id: 'modified-asc', label: 'Modified (Oldest)' }
+        ];
 
         // Vertical Separator
         const Sep = () => html`<div className="h-5 w-px bg-current opacity-10 mx-1"></div>`;
@@ -68,7 +88,7 @@
                     </div>
 
                     <div className="relative">
-                        <${Btn} onClick=${()=>setFavDrop(!favDrop)} icon=${Icons.FavList} title="Favorites" active=${favDrop} />
+                        <${Btn} onClick=${()=>setFavDrop(p=>!p)} icon=${Icons.FavList} title="Favorites" active=${favDrop} />
                         ${favDrop&&html`
                             <div 
                                 className="absolute top-full left-0 mt-2 w-64 bg-card border border-gray-200 dark:border-gray-700 shadow-xl rounded-md z-50 max-h-80 overflow-y-auto animate-in fade-in zoom-in-95 duration-100"
@@ -115,14 +135,7 @@
                         value=${search} 
                         onChange=${e=>doSearch(e.target.value)} 
                         onFocus=${()=>setSAct(true)} 
-                        onKeyDown=${e => {
-                            if (e.key === 'Enter' && sRes[sIdx]) {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                navSearch(sRes[sIdx].id);
-                                e.target.blur();
-                            }
-                        }} 
+                        onKeyDown=${handleSearchKeyDown} 
                         placeholder="Search..." 
                         className="w-full bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 focus:bg-background rounded-md pl-8 pr-3 py-1 outline-none transition-all border border-transparent text-sm h-8"
                         style=${{ borderColor: sAct ? 'var(--theme-accent)' : 'transparent' }} 
@@ -130,7 +143,7 @@
                     <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-30 text-xs pointer-events-none border border-current px-1 rounded">/</div>
                     
                     ${sAct&&sRes.length>0&&html`
-                        <div ref=${listRef} className="absolute top-full left-0 right-0 mt-1 bg-card border border-gray-200 dark:border-gray-700 shadow-xl rounded-md max-h-64 overflow-y-auto z-50 animate-in fade-in slide-in-from-top-1 duration-75">
+                        <div ref=${(el) => { searchDropdownContainerRef.current = el; listRef.current = el; }} className="absolute top-full left-0 right-0 mt-1 bg-card border border-gray-200 dark:border-gray-700 shadow-xl rounded-md max-h-64 overflow-y-auto z-50 animate-in fade-in slide-in-from-top-1 duration-75">
                             ${sRes.map((r,i)=>html`
                                 <div 
                                     key=${r.id} 
@@ -152,6 +165,24 @@
 
                 <!-- Right: App Actions -->
                 <div className="flex items-center gap-1">
+                    <div className="relative">
+                        <${Btn} onClick=${()=>setSortDrop(p=>!p)} icon=${Icons.Sort} title="Sort Order" active=${sortDrop} />
+                        ${sortDrop&&html`
+                            <div 
+                                ref=${sortDropdownRef}
+                                className="absolute top-full right-0 mt-2 w-48 bg-card border border-gray-200 dark:border-gray-700 shadow-xl rounded-md z-50 animate-in fade-in zoom-in-95 duration-100"
+                                onClick=${e => e.stopPropagation()}
+                            >
+                                <div className="p-2 text-xs font-bold uppercase text-gray-500 border-b dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">Sort By</div>
+                                ${sortOptions.map(opt => html`
+                                    <div key=${opt.id} onClick=${()=>{setSortOrder(opt.id);setSortDrop(false)}} className=${`px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer text-sm flex justify-between items-center ${sortOrder===opt.id?'text-primary font-medium':''}`}>
+                                        ${opt.label}
+                                        ${sortOrder===opt.id&&html`<span className="text-xs">✓</span>`}
+                                    </div>
+                                `)}
+                            </div>
+                        `}
+                    </div>
                     <${Btn} onClick=${()=>setDark(!dark)} icon=${dark?Icons.Sun:Icons.Moon} title="Toggle Theme" />
                     <${Btn} onClick=${()=>setSett(true)} icon=${Icons.Settings} title="Settings" />
                     <${Btn} onClick=${exportData} icon=${Icons.Download} title="Export JSON" />

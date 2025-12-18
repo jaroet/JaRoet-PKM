@@ -1,6 +1,6 @@
 
 (function(J) {
-    const { useState, useEffect, useRef } = React;
+    const { useState, useEffect, useRef, useCallback } = React;
     const { searchNotes } = J.Services.DB;
     const { getNote } = J.Services.DB;
     J.LinkerModal = ({isOpen, type, onClose, onSelect, sourceNoteId}) => {
@@ -18,6 +18,9 @@
             }
         }, [isOpen, sourceNoteId]);
 
+        const { useClickOutside } = J.Hooks;
+        const modalRef = useClickOutside(isOpen, useCallback(() => onClose(), []));
+
         const kd=(e)=>{
             if(e.key==='ArrowDown')setIdx(p=>(p+1)%(res.length+1));
             else if(e.key==='ArrowUp')setIdx(p=>(p-1+res.length+1)%(res.length+1));
@@ -32,7 +35,7 @@
 
         return html`
             ${!isOpen ? null : html`
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div ref=${modalRef} className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
                 <div className="w-96 bg-card p-4 rounded shadow-xl">
                     <h3 className="font-bold mb-2">Link ${type}</h3>
                     <input ref=${ref} className="w-full p-2 border rounded bg-background" value=${q} onChange=${e=>setQ(e.target.value)} onKeyDown=${kd} placeholder="Search or create..." />

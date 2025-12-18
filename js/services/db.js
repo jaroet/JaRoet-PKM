@@ -38,7 +38,8 @@
     const getTopology=async(cid)=>{
         const c=await db.notes.get(cid);if(!c)return{center:null,uppers:[],downers:[],lefters:[],righters:[]};
         const u=await db.notes.where('linksTo').equals(cid).toArray(),d=await db.notes.bulkGet(c.linksTo),l=await db.notes.bulkGet(c.relatedTo),rm=new Map();
-        for(const up of u){(await db.notes.bulkGet(up.linksTo)).forEach(s=>{if(s&&s.id!==cid)rm.set(s.id,s);})};
+        const siblingLists = await Promise.all(u.map(up => db.notes.bulkGet(up.linksTo)));
+        siblingLists.forEach(l => l.forEach(s => { if(s && s.id !== cid) rm.set(s.id, s); }));
         return{center:c,uppers:u.filter(Boolean),downers:d.filter(Boolean),lefters:l.filter(Boolean),righters:Array.from(rm.values())};
     };
     
@@ -52,6 +53,10 @@
     const setSectionVisibility=(k,v)=>db.meta.put({key:`ui_${k}`,value:v});
     const getAppTheme=async()=>(await db.meta.get('appTheme'))?.value||{light:{background:'#f1f5f9',section:'#ffffff',accent:'#3b82f6',bars:'#e2e8f0'},dark:{background:'#1e293b',section:'#0f172a',accent:'#60a5fa',bars:'#0f172a'}};
     const setAppTheme=(v)=>db.meta.put({key:'appTheme',value:v});
+    const getThemeMode=async()=>(await db.meta.get('themeMode'))?.value||'dark';
+    const setThemeMode=(v)=>db.meta.put({key:'themeMode',value:v});
+    const getSortOrder=async()=>(await db.meta.get('ui_sortOrder'))?.value||'title-asc';
+    const setSortOrder=(v)=>db.meta.put({key:'ui_sortOrder',value:v});
     const searchNotes = async (q) => {
         const query = q.trim();
         if (!query) return [];
@@ -60,6 +65,9 @@
         const allNotes = await db.notes.toArray();
         const scoredResults = [];
     
+        const escapedQuery = lowerCaseQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const wordBoundaryRegex = new RegExp(`\\b${escapedQuery}\\b`);
+
         for (const note of allNotes) {
             const lowerCaseTitle = note.title.toLowerCase();
             const matchIndex = lowerCaseTitle.indexOf(lowerCaseQuery);
@@ -69,9 +77,6 @@
                 // 1. Big bonus for starting with the query
                 if (matchIndex === 0) score += 100;
                 // 2. Bonus for being a whole word match
-                // Escape special regex characters from the query
-                const escapedQuery = lowerCaseQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                const wordBoundaryRegex = new RegExp(`\\b${escapedQuery}\\b`);
                 if (wordBoundaryRegex.test(lowerCaseTitle)) score += 50;
                 // 3. Score based on position (higher score for earlier match)
                 score += 10 / (matchIndex + 1);
@@ -107,7 +112,9 @@
     J.Services.DB = {
         db, getVaultList, getCurrentVaultName, switchVault, createVault, deleteCurrentVault, resetCurrentVault,
         seedDatabase, getNote, findNoteByTitle, getNoteTitlesByPrefix, createNote, updateNote, deleteNote, getNoteCount,
-        getTopology, getFavorites, toggleFavorite, getHomeNoteId, setHomeNoteId, getFontSize, setFontSize, getSectionVisibility, 
-        setSectionVisibility, getAppTheme, setAppTheme, searchNotes, getAllNotes, getAllNotesSortedBy, importNotes
+        getTopology, getFavorites, toggleFavorite, getHomeNoteId, setHomeNoteId, getFontSize, setFontSize, getSectionVisibility,
+        setSectionVisibility, getAppTheme, setAppTheme, getThemeMode, setThemeMode,
+        getSortOrder, setSortOrder,
+        searchNotes, getAllNotes, getAllNotesSortedBy, importNotes
     };
 })(window.Jaroet);

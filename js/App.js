@@ -1,7 +1,7 @@
 
 (function(J) {
     const { useState, useEffect, useRef, useCallback } = React;
-    const { db, getTopology, createNote, updateNote, deleteNote, getFavorites, toggleFavorite, seedDatabase, getNote, getAllNotes, importNotes, getHomeNoteId, searchNotes, getFontSize, getNoteCount, getVaultList, getCurrentVaultName, switchVault, getAppTheme, getSectionVisibility, findNoteByTitle, getNoteTitlesByPrefix } = J.Services.DB;
+    const { db, getTopology, createNote, updateNote, deleteNote, getFavorites, toggleFavorite, seedDatabase, getNote, getAllNotes, importNotes, getHomeNoteId, searchNotes, getFontSize, getNoteCount, getVaultList, getCurrentVaultName, switchVault, getAppTheme, getSectionVisibility, findNoteByTitle, getNoteTitlesByPrefix, getThemeMode, setThemeMode, getSortOrder, setSortOrder: persistSortOrder } = J.Services.DB;
     const { goToDate, goToToday, getDateSubtitle } = J.Services.Journal; 
     const { createRenderer, wikiLinkExtension } = J.Services.Markdown;
     const { NoteCard, LinkerModal, Editor, SettingsModal, ImportModal, RenameModal, NoteSection, TopBar, StatusBar, Icons, AllNotesModal, VaultChooser, APP_VERSION } = J;
@@ -13,6 +13,7 @@
         // --- State ---
         const {currentId,visit,replace,back,forward,canBack,canForward}=useHistory();
         const [topo,setTopo]=useState({center:null,uppers:[],downers:[],lefters:[],righters:[]}),[favs,setFavs]=useState([]),[dark,setDark]=useState(true),[fs,setFs]=useState(16),[vis,setVis]=useState({showFavorites:true,showContent:true}),[count,setCount]=useState(0);
+        const [sortOrder, setSortOrder] = useState('title-asc');
         
         // Navigation State
         const [fSec,setFSec]=useState('center'),[fIdx,setFIdx]=useState(0),[sel,setSel]=useState(new Set());
@@ -42,7 +43,17 @@
         }, [fSec]);
 
         // --- Effects & Sync ---
-        useEffect(()=>{seedDatabase().then(id=>{db.meta.get('currentCentralNoteId').then(v=>replace(v?v.value:id));getFontSize().then(setFs);getSectionVisibility().then(setVis);getFavorites().then(setFavs);getNoteCount().then(setCount);});},[]);
+        useEffect(()=>{
+            const init = async () => {
+                const initialId = await seedDatabase();
+                const currentNoteId = (await db.meta.get('currentCentralNoteId'))?.value || initialId;
+                replace(currentNoteId);
+                getFontSize().then(setFs);
+                getSectionVisibility().then(setVis);
+                getThemeMode().then(mode => setDark(mode === 'dark'));
+                getSortOrder().then(setSortOrder);
+            };
+            init();},[]);
         useEffect(()=>{document.documentElement.classList.toggle('dark',dark);},[dark]);
         useEffect(()=>{
             getAppTheme().then(t=>{
@@ -79,10 +90,24 @@
         useEffect(()=>{secIndRef.current=secInd},[secInd]);
 
         // Helper: Get Sorted Notes
+        const sortNotes = useCallback((notes) => {
+            if (!notes) return [];
+            const n = [...notes];
+            const getVal = (obj, key) => obj[key] || 0;
+            switch (sortOrder) {
+                case 'title-desc': return n.sort((a, b) => b.title.localeCompare(a.title));
+                case 'created-asc': return n.sort((a, b) => getVal(a, 'createdAt') - getVal(b, 'createdAt'));
+                case 'created-desc': return n.sort((a, b) => getVal(b, 'createdAt') - getVal(a, 'createdAt'));
+                case 'modified-asc': return n.sort((a, b) => getVal(a, 'modifiedAt') - getVal(b, 'modifiedAt'));
+                case 'modified-desc': return n.sort((a, b) => getVal(b, 'modifiedAt') - getVal(a, 'modifiedAt'));
+                default: return n.sort((a, b) => a.title.localeCompare(b.title));
+            }
+        }, [sortOrder]);
+
         const getSortedNotes = (sec, t=topo, f=favs) => {
             if(sec==='center')return t.center?[t.center]:[];
             let n=[]; if(sec==='up')n=t.uppers;else if(sec==='down')n=t.downers;else if(sec==='left')n=t.lefters;else if(sec==='right')n=t.righters;else if(sec==='favs')n=f;
-            return [...n].sort((a,b)=>a.title.localeCompare(b.title));
+            return sortNotes(n);
         };
 
         const getFocusedNote = () => {
@@ -281,7 +306,12 @@
                     deleteNote=${deleteNote} currentId=${currentId} canUnlink=${canUnlink} changeRelationship=${changeRelationship} handleLinkAction=${handleLinkAction}
                     search=${search} doSearch=${doSearch} sAct=${sAct} setSAct=${setSAct} sRes=${sRes} sIdx=${sIdx} setSIdx=${setSIdx} navSearch=${navSearch}
                     setAllNotes=${setAllNotes}
-                    setDark=${setDark} dark=${dark} setSett=${setSett} exportData=${exportData} setImpD=${setImpD} setImp=${setImp} fontSize=${fs}
+                    setDark=${(isDark) => {
+                        setDark(isDark);
+                        setThemeMode(isDark ? 'dark' : 'light');
+                    }} 
+                    dark=${dark} setSett=${setSett} exportData=${exportData} setImpD=${setImpD} setImp=${setImp} fontSize=${fs}
+                    sortOrder=${sortOrder} setSortOrder=${(o)=>{setSortOrder(o);persistSortOrder(o);}}
                 />
 
                 <!-- Canvas -->
@@ -296,12 +326,12 @@
                         <div className="flex flex-col gap-3 w-1/4">
                             <div className=${`${vis.showFavorites?'flex-1':'h-full'} relative bg-card rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0`}>
                                 <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Related</div>
-                                <${NoteSection} notes=${topo.lefters} section="left" containerClasses="absolute inset-0 flex flex-col gap-0 overflow-y-auto p-3 custom-scrollbar rounded-3xl pt-6" itemClasses="w-full" containerId="container-left" ...${sp} />
+                                <${NoteSection} notes=${sortNotes(topo.lefters)} section="left" containerClasses="absolute inset-0 flex flex-col gap-0 overflow-y-auto p-3 custom-scrollbar rounded-3xl pt-6" itemClasses="w-full" containerId="container-left" ...${sp} />
                             </div>
                             ${vis.showFavorites&&html`
                                 <div className="flex-1 relative bg-card rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
                                     <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Favorites</div>
-                                    <${NoteSection} notes=${favs} section="favs" containerClasses="absolute inset-0 flex flex-col gap-0 overflow-y-auto p-3 custom-scrollbar rounded-3xl pt-6" itemClasses="w-full" containerId="container-favs" ...${sp} />
+                                    <${NoteSection} notes=${sortNotes(favs)} section="favs" containerClasses="absolute inset-0 flex flex-col gap-0 overflow-y-auto p-3 custom-scrollbar rounded-3xl pt-6" itemClasses="w-full" containerId="container-favs" ...${sp} />
                                 </div>
                             `}
                         </div>
@@ -312,7 +342,7 @@
                                 <div className="flex-[7] relative bg-card rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
                                     <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Parents</div>
                                     <div className="absolute inset-0 overflow-x-auto overflow-y-hidden custom-scrollbar rounded-3xl pt-6">
-                                        <${NoteSection} notes=${topo.uppers} section="up" containerClasses="h-full w-fit flex flex-col flex-wrap content-start gap-0 p-3 mx-auto" itemClasses="w-[300px] flex-shrink-0" containerId="container-up" ...${sp} />
+                                        <${NoteSection} notes=${sortNotes(topo.uppers)} section="up" containerClasses="h-full w-fit flex flex-col flex-wrap content-start gap-0 p-3 mx-auto" itemClasses="w-[300px] flex-shrink-0" containerId="container-up" ...${sp} />
                                     </div>
                                 </div>
                                 <div className="flex-[3] relative flex items-center justify-center p-4 z-10 bg-card rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
@@ -329,7 +359,7 @@
                             <div className="flex-1 relative bg-card rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
                                 <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Children</div>
                                 <div className="absolute inset-0 overflow-x-auto overflow-y-hidden custom-scrollbar rounded-3xl pt-6">
-                                    <${NoteSection} notes=${topo.downers} section="down" containerClasses="h-full w-fit flex flex-col flex-wrap content-start gap-0 p-3 mx-auto" itemClasses="w-[300px] flex-shrink-0" containerId="container-down" ...${sp} />
+                                    <${NoteSection} notes=${sortNotes(topo.downers)} section="down" containerClasses="h-full w-fit flex flex-col flex-wrap content-start gap-0 p-3 mx-auto" itemClasses="w-[300px] flex-shrink-0" containerId="container-down" ...${sp} />
                                 </div>
                             </div>
                         </div>
@@ -338,7 +368,7 @@
                         <div className="flex flex-col gap-3 w-1/4">
                             <div className=${`${vis.showContent?'flex-1':'h-full'} relative bg-card rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0`}>
                                 <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Siblings</div>
-                                <${NoteSection} notes=${topo.righters} section="right" containerClasses="flex flex-col gap-0 overflow-y-auto p-3 h-full custom-scrollbar rounded-3xl pt-6" itemClasses="w-full" containerId="container-right" ...${sp} />
+                                <${NoteSection} notes=${sortNotes(topo.righters)} section="right" containerClasses="flex flex-col gap-0 overflow-y-auto p-3 h-full custom-scrollbar rounded-3xl pt-6" itemClasses="w-full" containerId="container-right" ...${sp} />
                             </div>
                             ${vis.showContent&&html`
                                 <div className=${`flex-1 relative bg-card rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0 outline-none ${fSec==='content'?'ring-2 ring-primary':''}`}>
@@ -350,7 +380,7 @@
                     </div>
                 </div>
 
-                <${StatusBar} noteCount=${count} vaultName=${getCurrentVaultName()} version=${APP_VERSION} fontSize=${fs} onVaultClick=${() => setVaultChooser(p => !p)} />
+                <${StatusBar} noteCount=${count} vaultName=${getCurrentVaultName()} version=${APP_VERSION} fontSize=${fs} onVaultClick=${() => setVaultChooser(p => !p)} activeNote=${activeNote} />
 
                 <${Editor} 
                     isOpen=${ed} mode=${edMode} note=${fSec==='center'?topo.center:getSortedNotes(fSec,topo,favs)[fIdx]} 
