@@ -1,7 +1,7 @@
 
 (function(J) {
     const { useState, useEffect, useRef, useCallback } = React;
-    const { db, getTopology, createNote, updateNote, deleteNote, getFavorites, toggleFavorite, seedDatabase, getNote, getAllNotes, importNotes, getHomeNoteId, searchNotes, getFontSize, getNoteCount, getVaultList, getCurrentVaultName, switchVault, getAppTheme, getSectionVisibility, findNoteByTitle, getNoteTitlesByPrefix } = J.Services.DB;
+    const { db, getTopology, createNote, updateNote, deleteNote, getFavorites, toggleFavorite, seedDatabase, getNote, getAllNotes, importNotes, getHomeNoteId, searchNotes, getFontSize, getNoteCount, getVaultList, getCurrentVaultName, switchVault, getAppTheme, getSectionVisibility, findNoteByTitle, getNoteTitlesByPrefix, getThemeMode, setThemeMode } = J.Services.DB;
     const { goToDate, goToToday, getDateSubtitle } = J.Services.Journal; 
     const { createRenderer, wikiLinkExtension } = J.Services.Markdown;
     const { NoteCard, LinkerModal, Editor, SettingsModal, ImportModal, RenameModal, NoteSection, TopBar, StatusBar, Icons, AllNotesModal, VaultChooser, APP_VERSION } = J;
@@ -42,7 +42,16 @@
         }, [fSec]);
 
         // --- Effects & Sync ---
-        useEffect(()=>{seedDatabase().then(id=>{db.meta.get('currentCentralNoteId').then(v=>replace(v?v.value:id));getFontSize().then(setFs);getSectionVisibility().then(setVis);getFavorites().then(setFavs);getNoteCount().then(setCount);});},[]);
+        useEffect(()=>{
+            const init = async () => {
+                const initialId = await seedDatabase();
+                const currentNoteId = (await db.meta.get('currentCentralNoteId'))?.value || initialId;
+                replace(currentNoteId);
+                getFontSize().then(setFs);
+                getSectionVisibility().then(setVis);
+                getThemeMode().then(mode => setDark(mode === 'dark'));
+            };
+            init();},[]);
         useEffect(()=>{document.documentElement.classList.toggle('dark',dark);},[dark]);
         useEffect(()=>{
             getAppTheme().then(t=>{
@@ -281,7 +290,11 @@
                     deleteNote=${deleteNote} currentId=${currentId} canUnlink=${canUnlink} changeRelationship=${changeRelationship} handleLinkAction=${handleLinkAction}
                     search=${search} doSearch=${doSearch} sAct=${sAct} setSAct=${setSAct} sRes=${sRes} sIdx=${sIdx} setSIdx=${setSIdx} navSearch=${navSearch}
                     setAllNotes=${setAllNotes}
-                    setDark=${setDark} dark=${dark} setSett=${setSett} exportData=${exportData} setImpD=${setImpD} setImp=${setImp} fontSize=${fs}
+                    setDark=${(isDark) => {
+                        setDark(isDark);
+                        setThemeMode(isDark ? 'dark' : 'light');
+                    }} 
+                    dark=${dark} setSett=${setSett} exportData=${exportData} setImpD=${setImpD} setImp=${setImp} fontSize=${fs}
                 />
 
                 <!-- Canvas -->

@@ -52,6 +52,8 @@
     const setSectionVisibility=(k,v)=>db.meta.put({key:`ui_${k}`,value:v});
     const getAppTheme=async()=>(await db.meta.get('appTheme'))?.value||{light:{background:'#f1f5f9',section:'#ffffff',accent:'#3b82f6',bars:'#e2e8f0'},dark:{background:'#1e293b',section:'#0f172a',accent:'#60a5fa',bars:'#0f172a'}};
     const setAppTheme=(v)=>db.meta.put({key:'appTheme',value:v});
+    const getThemeMode=async()=>(await db.meta.get('themeMode'))?.value||'dark';
+    const setThemeMode=(v)=>db.meta.put({key:'themeMode',value:v});
     const searchNotes = async (q) => {
         const query = q.trim();
         if (!query) return [];
@@ -107,7 +109,8 @@
     J.Services.DB = {
         db, getVaultList, getCurrentVaultName, switchVault, createVault, deleteCurrentVault, resetCurrentVault,
         seedDatabase, getNote, findNoteByTitle, getNoteTitlesByPrefix, createNote, updateNote, deleteNote, getNoteCount,
-        getTopology, getFavorites, toggleFavorite, getHomeNoteId, setHomeNoteId, getFontSize, setFontSize, getSectionVisibility, 
-        setSectionVisibility, getAppTheme, setAppTheme, searchNotes, getAllNotes, getAllNotesSortedBy, importNotes
+        getTopology, getFavorites, toggleFavorite, getHomeNoteId, setHomeNoteId, getFontSize, setFontSize, getSectionVisibility,
+        setSectionVisibility, getAppTheme, setAppTheme, getThemeMode, setThemeMode,
+        searchNotes, getAllNotes, getAllNotesSortedBy, importNotes
     };
 })(window.Jaroet);
