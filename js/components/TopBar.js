@@ -1,6 +1,6 @@
 
 (function(J) {
-    const { useRef, useCallback } = React;
+    const { useState, useRef, useCallback } = React;
     const { Icons, CalendarDropdown, VaultChooser } = J;
     const { deleteNote, getHomeNoteId } = J.Services.DB;
     const { goToDate } = J.Services.Journal;
@@ -14,10 +14,11 @@
             canUnlink, changeRelationship, handleLinkAction,
             search, doSearch, sAct, setSAct, sRes, navSearch,
             setDark, dark, setSett, exportData, setImpD, setImp, setAllNotes,
-            fontSize
+            fontSize, sortOrder, setSortOrder
         } = props;
 
         const searchRef = useRef(null);
+        const [sortDrop, setSortDrop] = useState(false);
 
         const { useClickOutside, useListNavigation } = J.Hooks;
 
@@ -34,6 +35,7 @@
 
         // Use the new hook for click-outside behavior
         const favDropdownContainerRef = useClickOutside(favDrop, useCallback(() => setFavDrop(false), []));
+        const sortDropdownRef = useClickOutside(sortDrop, useCallback(() => setSortDrop(false), []));
         const searchDropdownContainerRef = useClickOutside(sAct && sRes.length > 0, useCallback(() => {
             setSAct(false);
             searchRef.current?.blur(); // Optionally blur the search input
@@ -51,6 +53,15 @@
                 <${icon} />
             </button>
         `;
+
+        const sortOptions = [
+            { id: 'title-asc', label: 'Title (A-Z)' },
+            { id: 'title-desc', label: 'Title (Z-A)' },
+            { id: 'created-desc', label: 'Created (Newest)' },
+            { id: 'created-asc', label: 'Created (Oldest)' },
+            { id: 'modified-desc', label: 'Modified (Newest)' },
+            { id: 'modified-asc', label: 'Modified (Oldest)' }
+        ];
 
         // Vertical Separator
         const Sep = () => html`<div className="h-5 w-px bg-current opacity-10 mx-1"></div>`;
@@ -154,6 +165,24 @@
 
                 <!-- Right: App Actions -->
                 <div className="flex items-center gap-1">
+                    <div className="relative">
+                        <${Btn} onClick=${()=>setSortDrop(p=>!p)} icon=${Icons.Sort} title="Sort Order" active=${sortDrop} />
+                        ${sortDrop&&html`
+                            <div 
+                                ref=${sortDropdownRef}
+                                className="absolute top-full right-0 mt-2 w-48 bg-card border border-gray-200 dark:border-gray-700 shadow-xl rounded-md z-50 animate-in fade-in zoom-in-95 duration-100"
+                                onClick=${e => e.stopPropagation()}
+                            >
+                                <div className="p-2 text-xs font-bold uppercase text-gray-500 border-b dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">Sort By</div>
+                                ${sortOptions.map(opt => html`
+                                    <div key=${opt.id} onClick=${()=>{setSortOrder(opt.id);setSortDrop(false)}} className=${`px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer text-sm flex justify-between items-center ${sortOrder===opt.id?'text-primary font-medium':''}`}>
+                                        ${opt.label}
+                                        ${sortOrder===opt.id&&html`<span className="text-xs">✓</span>`}
+                                    </div>
+                                `)}
+                            </div>
+                        `}
+                    </div>
                     <${Btn} onClick=${()=>setDark(!dark)} icon=${dark?Icons.Sun:Icons.Moon} title="Toggle Theme" />
                     <${Btn} onClick=${()=>setSett(true)} icon=${Icons.Settings} title="Settings" />
                     <${Btn} onClick=${exportData} icon=${Icons.Download} title="Export JSON" />
