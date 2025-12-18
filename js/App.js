@@ -1,7 +1,7 @@
 
 (function(J) {
     const { useState, useEffect, useRef, useCallback } = React;
-    const { db, getTopology, createNote, updateNote, deleteNote, getFavorites, toggleFavorite, seedDatabase, getNote, getAllNotes, importNotes, getHomeNoteId, searchNotes, getFontSize, getNoteCount, getVaultList, getCurrentVaultName, switchVault, getAppTheme, getSectionVisibility, findNoteByTitle, getNoteTitlesByPrefix, getThemeMode, setThemeMode } = J.Services.DB;
+    const { db, getTopology, createNote, updateNote, deleteNote, getFavorites, toggleFavorite, seedDatabase, getNote, getAllNotes, importNotes, getHomeNoteId, searchNotes, getFontSize, getNoteCount, getVaultList, getCurrentVaultName, switchVault, getAppTheme, getSectionVisibility, findNoteByTitle, getNoteTitlesByPrefix, getThemeMode, setThemeMode, getSortOrder, setSortOrder: persistSortOrder } = J.Services.DB;
     const { goToDate, goToToday, getDateSubtitle } = J.Services.Journal; 
     const { createRenderer, wikiLinkExtension } = J.Services.Markdown;
     const { NoteCard, LinkerModal, Editor, SettingsModal, ImportModal, RenameModal, NoteSection, TopBar, StatusBar, Icons, AllNotesModal, VaultChooser, APP_VERSION } = J;
@@ -51,6 +51,7 @@
                 getFontSize().then(setFs);
                 getSectionVisibility().then(setVis);
                 getThemeMode().then(mode => setDark(mode === 'dark'));
+                getSortOrder().then(setSortOrder);
             };
             init();},[]);
         useEffect(()=>{document.documentElement.classList.toggle('dark',dark);},[dark]);
@@ -310,7 +311,7 @@
                         setThemeMode(isDark ? 'dark' : 'light');
                     }} 
                     dark=${dark} setSett=${setSett} exportData=${exportData} setImpD=${setImpD} setImp=${setImp} fontSize=${fs}
-                    sortOrder=${sortOrder} setSortOrder=${setSortOrder}
+                    sortOrder=${sortOrder} setSortOrder=${(o)=>{setSortOrder(o);persistSortOrder(o);}}
                 />
 
                 <!-- Canvas -->

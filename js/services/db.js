@@ -55,6 +55,8 @@
     const setAppTheme=(v)=>db.meta.put({key:'appTheme',value:v});
     const getThemeMode=async()=>(await db.meta.get('themeMode'))?.value||'dark';
     const setThemeMode=(v)=>db.meta.put({key:'themeMode',value:v});
+    const getSortOrder=async()=>(await db.meta.get('ui_sortOrder'))?.value||'title-asc';
+    const setSortOrder=(v)=>db.meta.put({key:'ui_sortOrder',value:v});
     const searchNotes = async (q) => {
         const query = q.trim();
         if (!query) return [];
@@ -112,6 +114,7 @@
         seedDatabase, getNote, findNoteByTitle, getNoteTitlesByPrefix, createNote, updateNote, deleteNote, getNoteCount,
         getTopology, getFavorites, toggleFavorite, getHomeNoteId, setHomeNoteId, getFontSize, setFontSize, getSectionVisibility,
         setSectionVisibility, getAppTheme, setAppTheme, getThemeMode, setThemeMode,
+        getSortOrder, setSortOrder,
         searchNotes, getAllNotes, getAllNotesSortedBy, importNotes
     };
 })(window.Jaroet);
