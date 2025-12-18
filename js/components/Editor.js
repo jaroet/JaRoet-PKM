@@ -27,6 +27,8 @@
         const [cPos,setCPos]=useState({top:0,left:0});const [trigIdx,setTrigIdx]=useState(-1);
         
         const ta=useRef(null); const prevRef=useRef(null); const conRef=useRef(null);
+        const formatBuffer = useRef('');
+        const formatTimeout = useRef(null);
         const { useClickOutside } = J.Hooks;
 
         // Initialize
@@ -111,6 +113,53 @@
                 handleAutocompleteKeyDown(e);
                 // If the hook handled it, we can stop.
                 if (['ArrowUp', 'ArrowDown', 'Enter', 'Tab', 'Escape'].includes(e.key)) {
+                    return;
+                }
+            }
+
+            // Formatting Shortcuts (Wrap/Unwrap Selection) with Delay
+            if (ta.current && ta.current.selectionStart !== ta.current.selectionEnd) {
+                if (['[', '*'].includes(e.key)) {
+                    e.preventDefault();
+                    const key = e.key;
+
+                    // Reset buffer if key changes
+                    if (formatBuffer.current.length > 0 && formatBuffer.current[0] !== key) {
+                        formatBuffer.current = '';
+                        if (formatTimeout.current) clearTimeout(formatTimeout.current);
+                    }
+
+                    formatBuffer.current += key;
+                    if (formatTimeout.current) clearTimeout(formatTimeout.current);
+
+                    formatTimeout.current = setTimeout(() => {
+                        const buf = formatBuffer.current;
+                        formatBuffer.current = '';
+                        
+                        if (!ta.current) return;
+
+                        const start = ta.current.selectionStart;
+                        const end = ta.current.selectionEnd;
+                        const val = ta.current.value;
+                        const selectedText = val.substring(start, end);
+                        const before = val.substring(0, start);
+                        const after = val.substring(end);
+                        
+                        let syntax = buf;
+                        let closeSyntax = buf;
+
+                        if (buf.startsWith('[')) closeSyntax = buf.replace(/\[/g, ']');
+
+                        if (before.endsWith(syntax) && after.startsWith(closeSyntax)) {
+                            const newBefore = before.substring(0, before.length - syntax.length);
+                            const newAfter = after.substring(closeSyntax.length);
+                            setTxt(newBefore + selectedText + newAfter);
+                            setTimeout(() => { if(ta.current) { ta.current.focus(); ta.current.setSelectionRange(newBefore.length, newBefore.length + selectedText.length); } }, 0);
+                        } else {
+                            setTxt(before + syntax + selectedText + closeSyntax + after);
+                            setTimeout(() => { if(ta.current) { ta.current.focus(); ta.current.setSelectionRange(start + syntax.length, end + syntax.length); } }, 0);
+                        }
+                    }, 200);
                     return;
                 }
             }
