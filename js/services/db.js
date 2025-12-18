@@ -38,7 +38,8 @@
     const getTopology=async(cid)=>{
         const c=await db.notes.get(cid);if(!c)return{center:null,uppers:[],downers:[],lefters:[],righters:[]};
         const u=await db.notes.where('linksTo').equals(cid).toArray(),d=await db.notes.bulkGet(c.linksTo),l=await db.notes.bulkGet(c.relatedTo),rm=new Map();
-        for(const up of u){(await db.notes.bulkGet(up.linksTo)).forEach(s=>{if(s&&s.id!==cid)rm.set(s.id,s);})};
+        const siblingLists = await Promise.all(u.map(up => db.notes.bulkGet(up.linksTo)));
+        siblingLists.forEach(l => l.forEach(s => { if(s && s.id !== cid) rm.set(s.id, s); }));
         return{center:c,uppers:u.filter(Boolean),downers:d.filter(Boolean),lefters:l.filter(Boolean),righters:Array.from(rm.values())};
     };
     
@@ -62,6 +63,9 @@
         const allNotes = await db.notes.toArray();
         const scoredResults = [];
     
+        const escapedQuery = lowerCaseQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const wordBoundaryRegex = new RegExp(`\\b${escapedQuery}\\b`);
+
         for (const note of allNotes) {
             const lowerCaseTitle = note.title.toLowerCase();
             const matchIndex = lowerCaseTitle.indexOf(lowerCaseQuery);
@@ -71,9 +75,6 @@
                 // 1. Big bonus for starting with the query
                 if (matchIndex === 0) score += 100;
                 // 2. Bonus for being a whole word match
-                // Escape special regex characters from the query
-                const escapedQuery = lowerCaseQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                const wordBoundaryRegex = new RegExp(`\\b${escapedQuery}\\b`);
                 if (wordBoundaryRegex.test(lowerCaseTitle)) score += 50;
                 // 3. Score based on position (higher score for earlier match)
                 score += 10 / (matchIndex + 1);
