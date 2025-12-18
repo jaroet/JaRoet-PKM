@@ -3,7 +3,11 @@
 
 All notable changes to the JaRoet PKM project will be documented in this file.
 
-## [0.4.1] - 2024-12-18
+## [0.5.0] - 2024-12-19
+
+### Features
+- **Global Sorting**: Added a sort icon to the top bar to sort note lists (Parents, Children, Siblings, Related, Favorites) by Title, Created, or Modified date (ascending/descending).
+- **Status Bar Info**: Added Created and Modified timestamps for the active note to the status bar.
 
 ### Fixed
 - **Search Navigation Bugs**: Resolved a series of complex bugs related to navigating from the search bar. The application now correctly handles focus, state updates, and event propagation, ensuring that all functionality (hotkeys, content previews) works reliably after a search.
