@@ -138,6 +138,35 @@
                 return;
             }
 
+            // Tab for indent/outdent
+            if (e.key === 'Tab' && !prev && e.target === ta.current) {
+                // The autocomplete hook already handles Tab when the suggestion box is open.
+                // This check prevents indenting when trying to select an autocomplete item.
+                if (sug) return;
+
+                const val = ta.current.value;
+                const start = ta.current.selectionStart;
+                const before = val.substring(0, start);
+                const lineStart = before.lastIndexOf('\n') + 1;
+                const currentLine = val.substring(lineStart, val.indexOf('\n', start) === -1 ? val.length : val.indexOf('\n', start));
+
+                // Only apply to lines that look like list items
+                if (currentLine.trim().startsWith('-')) {
+                    e.preventDefault();
+                    let newVal, newCursorPos;
+                    if (e.shiftKey) { // Outdent
+                        newVal = val.substring(0, lineStart) + val.substring(lineStart + 2);
+                        newCursorPos = Math.max(lineStart, start - 2);
+                    } else { // Indent
+                        newVal = val.substring(0, lineStart) + '  ' + val.substring(lineStart);
+                        newCursorPos = start + 2;
+                    }
+                    setTxt(newVal);
+                    setTimeout(() => { if (ta.current) { ta.current.selectionStart = ta.current.selectionEnd = newCursorPos; ta.current.focus(); } }, 0);
+                    return;
+                }
+            }
+
             // List Continuation
             if(e.key==='Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !prev && e.target === ta.current){
                 const val = ta.current.value;
