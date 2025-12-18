@@ -137,6 +137,36 @@
                 }
                 return;
             }
+
+            // List Continuation
+            if(e.key==='Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !prev && e.target === ta.current){
+                const val = ta.current.value;
+                const start = ta.current.selectionStart;
+                const end = ta.current.selectionEnd;
+                const before = val.substring(0, start);
+                const lineStart = before.lastIndexOf('\n') + 1;
+                const currentLine = before.substring(lineStart);
+                const match = currentLine.match(/^(\s*-\s)(.*)/);
+                
+                if(match){
+                    e.preventDefault();
+                    const prefix = match[1];
+                    const content = match[2];
+                    let newVal, newCursorPos;
+                    
+                    if(!content.trim()){
+                        newVal = val.substring(0, lineStart) + '\n' + val.substring(end);
+                        newCursorPos = lineStart + 1;
+                    } else {
+                        const insertion = '\n' + prefix;
+                        newVal = val.substring(0, start) + insertion + val.substring(end);
+                        newCursorPos = start + insertion.length;
+                    }
+                    setTxt(newVal);
+                    setTimeout(()=>{ if(ta.current){ ta.current.selectionStart = ta.current.selectionEnd = newCursorPos; ta.current.focus(); } }, 0);
+                    return;
+                }
+            }
         };
 
         const handlePreviewClick=(e)=>{
