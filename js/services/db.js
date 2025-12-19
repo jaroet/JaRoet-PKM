@@ -10,6 +10,7 @@
     class DB extends Dexie{constructor(){super(getCurrentVaultName());
         this.version(1).stores({notes:'id,title,*linksTo,*relatedTo',meta:'key'});
         this.version(2).stores({notes:'id,title,*linksTo,*relatedTo,createdAt,modifiedAt'});
+        this.version(3).stores({notes:'id,title,*linksTo,*relatedTo,createdAt,modifiedAt', themes: 'id'});
     }}
     const db=new DB(); 
 
@@ -23,8 +24,32 @@
             const id=crypto.randomUUID(),now=Date.now();
             await db.notes.add({id,title:'Welcome',content:'# Welcome\n\nStart typing...',linksTo:[],relatedTo:[],isFavorite:false,createdAt:now,modifiedAt:now});
             await db.meta.put({key:'currentCentralNoteId',value:id});await db.meta.put({key:'favoritesList',value:[]});await db.meta.put({key:'homeNoteId',value:id});
-            return id;
-        } return null;
+        }
+        
+        // Seed Themes (Version 3 feature)
+        if(await db.themes.count()===0){
+            await db.themes.bulkAdd([
+                {
+                    id: 'light', name: 'JaRoet Light', type: 'light',
+                    values: {
+                        '--background': '#f8fafc', '--foreground': '#0f172a', '--card': '#ffffff', '--card-foreground': '#0f172a',
+                        '--primary': '#3b82f6', '--primary-foreground': '#ffffff', '--scrollbar-thumb': '#94a3b8',
+                        '--theme-bg': '#f1f5f9', '--theme-section': '#ffffff', '--theme-bars': '#e2e8f0', '--theme-accent': '#3b82f6'
+                    }
+                },
+                {
+                    id: 'dark', name: 'JaRoet Dark', type: 'dark',
+                    values: {
+                        '--background': '#0f172a', '--foreground': '#f8fafc', '--card': '#1e293b', '--card-foreground': '#f8fafc',
+                        '--primary': '#60a5fa', '--primary-foreground': '#0f172a', '--scrollbar-thumb': '#475569',
+                        '--theme-bg': '#0f172a', '--theme-section': '#1e293b', '--theme-bars': '#0f172a', '--theme-accent': '#60a5fa'
+                    }
+                }
+            ]);
+            if(!(await db.meta.get('activeThemeId'))) await db.meta.put({key:'activeThemeId', value:'dark'});
+        }
+        
+        return (await db.meta.get('currentCentralNoteId'))?.value;
     };
 
     const getNote=(id)=>db.notes.get(id);
@@ -51,10 +76,15 @@
     const setFontSize=(v)=>db.meta.put({key:'fontSize',value:v});
     const getSectionVisibility=async()=>({showFavorites:(await db.meta.get('ui_showFavorites'))?.value??true,showContent:(await db.meta.get('ui_showContent'))?.value??true});
     const setSectionVisibility=(k,v)=>db.meta.put({key:`ui_${k}`,value:v});
-    const getAppTheme=async()=>(await db.meta.get('appTheme'))?.value||{light:{background:'#f1f5f9',section:'#ffffff',accent:'#3b82f6',bars:'#e2e8f0'},dark:{background:'#1e293b',section:'#0f172a',accent:'#60a5fa',bars:'#0f172a'}};
-    const setAppTheme=(v)=>db.meta.put({key:'appTheme',value:v});
-    const getThemeMode=async()=>(await db.meta.get('themeMode'))?.value||'dark';
-    const setThemeMode=(v)=>db.meta.put({key:'themeMode',value:v});
+    
+    // Theme Methods
+    const getThemes = () => db.themes.toArray();
+    const getTheme = (id) => db.themes.get(id);
+    const saveTheme = (theme) => db.themes.put(theme);
+    const deleteTheme = (id) => db.themes.delete(id);
+    const getActiveThemeId = async () => (await db.meta.get('activeThemeId'))?.value || 'dark';
+    const setActiveThemeId = (id) => db.meta.put({key:'activeThemeId', value:id});
+
     const getSortOrder=async()=>(await db.meta.get('ui_sortOrder'))?.value||'title-asc';
     const setSortOrder=(v)=>db.meta.put({key:'ui_sortOrder',value:v});
     const searchNotes = async (q) => {
@@ -113,7 +143,7 @@
         db, getVaultList, getCurrentVaultName, switchVault, createVault, deleteCurrentVault, resetCurrentVault,
         seedDatabase, getNote, findNoteByTitle, getNoteTitlesByPrefix, createNote, updateNote, deleteNote, getNoteCount,
         getTopology, getFavorites, toggleFavorite, getHomeNoteId, setHomeNoteId, getFontSize, setFontSize, getSectionVisibility,
-        setSectionVisibility, getAppTheme, setAppTheme, getThemeMode, setThemeMode,
+        setSectionVisibility, getThemes, getTheme, saveTheme, deleteTheme, getActiveThemeId, setActiveThemeId,
         getSortOrder, setSortOrder,
         searchNotes, getAllNotes, getAllNotesSortedBy, importNotes
     };

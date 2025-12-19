@@ -2,21 +2,22 @@
 (function(J) {
     const { useState, useEffect, useRef } = React;
     const { 
-        getHomeNoteId, getNote, getSectionVisibility, getAppTheme, 
+        getHomeNoteId, getNote, getSectionVisibility, 
         createVault, deleteCurrentVault, resetCurrentVault, 
-        setHomeNoteId, setFontSize: dbSetFontSize, setAppTheme, 
+        setHomeNoteId, setFontSize: dbSetFontSize, getThemes, getTheme, saveTheme, deleteTheme, getActiveThemeId, setActiveThemeId,
         setSectionVisibility, getCurrentVaultName, searchNotes 
     } = J.Services.DB;
 
     J.SettingsModal = ({isOpen, onClose, currentCentralNoteId, fontSize, onFontSizeChange, onThemeChange, onSettingsChange, initialTab, focusOn}) => {
         // State
         const [tab, setTab] = useState(initialTab || 'general');
-        const [themeMode, setThemeMode] = useState('dark');
         const [homeTitle, setHomeTitle] = useState('Loading...');
         const [q, setQ] = useState('');
         const [res, setRes] = useState([]);
         const [localFs, setLocalFs] = useState(fontSize);
-        const [appTheme, setLocalAppTheme] = useState(null);
+        const [themes, setThemes] = useState([]);
+        const [curThemeId, setCurThemeId] = useState('');
+        const [editingTheme, setEditingTheme] = useState(null);
         const [vis, setVis] = useState({showFavorites: true, showContent: true});
         const [newV, setNewV] = useState('');
         const [confDel, setConfDel] = useState(false);
@@ -38,10 +39,6 @@
                         setHomeTitle('Not Set');
                     }
                     
-                    // Theme
-                    const t = await getAppTheme();
-                    setLocalAppTheme(t);
-                    
                     // Visibility
                     const v = await getSectionVisibility();
                     setVis(v);
@@ -62,6 +59,14 @@
                     if (focusOn === 'newVaultInput') {
                         setTimeout(() => newVaultInputRef.current?.focus(), 100);
                     }
+
+                    // Load Themes
+                    const ts = await getThemes();
+                    setThemes(ts);
+                    const active = await getActiveThemeId();
+                    setCurThemeId(active);
+                    const t = ts.find(x => x.id === active);
+                    if(t) setEditingTheme(JSON.parse(JSON.stringify(t)));
                 };
                 init();
             }
@@ -80,12 +85,38 @@
             setQ(''); setRes([]);
         };
 
-        const handleThemeUpdate = async (key, val) => {
-            if (!appTheme) return;
-            const newTheme = { ...appTheme, [themeMode]: { ...appTheme[themeMode], [key]: val } };
-            setLocalAppTheme(newTheme);
-            await setAppTheme(newTheme);
+        const handleThemeSelect = async (id) => {
+            setCurThemeId(id);
+            await setActiveThemeId(id);
+            const t = themes.find(x => x.id === id);
+            if(t) setEditingTheme(JSON.parse(JSON.stringify(t)));
             onThemeChange();
+        };
+
+        const handleThemeValueChange = (key, val) => {
+            if(!editingTheme) return;
+            const updated = { ...editingTheme, values: { ...editingTheme.values, [key]: val } };
+            setEditingTheme(updated);
+        };
+
+        const saveCurrentTheme = async () => {
+            if(!editingTheme) return;
+            await saveTheme(editingTheme);
+            // Refresh list
+            const ts = await getThemes();
+            setThemes(ts);
+            onThemeChange(); // Apply changes immediately
+        };
+
+        const createNewTheme = async () => {
+            const name = prompt("Name for new theme:", editingTheme.name + " Copy");
+            if(!name) return;
+            const newId = crypto.randomUUID();
+            const newTheme = { ...editingTheme, id: newId, name: name };
+            await saveTheme(newTheme);
+            const ts = await getThemes();
+            setThemes(ts);
+            handleThemeSelect(newId);
         };
 
         const handleVisChange = async (key, val) => {
@@ -203,30 +234,49 @@
                             </div>
                         `}
 
-                        ${tab === 'theme' && appTheme && html`
+                        ${tab === 'theme' && editingTheme && html`
                             <div className="space-y-6">
-                                <div className="flex justify-center p-1 bg-gray-100 dark:bg-gray-800 rounded-lg mb-6">
-                                    <button onClick=${() => setThemeMode('light')} className=${`flex-1 py-1 text-sm font-medium rounded-md transition-all ${themeMode === 'light' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-300'}`}>Light Mode</button>
-                                    <button onClick=${() => setThemeMode('dark')} className=${`flex-1 py-1 text-sm font-medium rounded-md transition-all ${themeMode === 'dark' ? 'bg-gray-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-300'}`}>Dark Mode</button>
+                                <div className="flex gap-2 mb-4">
+                                    <select 
+                                        value=${curThemeId} 
+                                        onChange=${e => handleThemeSelect(e.target.value)}
+                                        className="flex-1 p-2 rounded border border-gray-300 dark:border-gray-700 bg-background"
+                                    >
+                                        ${themes.map(t => html`<option key=${t.id} value=${t.id}>${t.name}</option>`)}
+                                    </select>
+                                    <button onClick=${createNewTheme} className="px-3 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:opacity-80" title="Duplicate Current Theme">+</button>
+                                    ${!['light','dark'].includes(curThemeId) && html`
+                                        <button onClick=${async ()=>{
+                                            if(confirm('Delete theme?')){
+                                                await deleteTheme(curThemeId);
+                                                const ts = await getThemes();
+                                                setThemes(ts);
+                                                handleThemeSelect('dark');
+                                            }
+                                        }} className="px-3 py-2 bg-red-500/10 text-red-500 rounded hover:bg-red-500/20" title="Delete Theme">🗑️</button>
+                                    `}
+                                </div>
+
+                                <div className="flex items-center gap-2 mb-4">
+                                    <label className="text-sm font-medium">Theme Name:</label>
+                                    <input type="text" value=${editingTheme.name} onChange=${e => setEditingTheme({...editingTheme, name: e.target.value})} className="flex-1 p-1 rounded border bg-transparent" />
                                 </div>
 
                                 <div className="space-y-4">
-                                    ${['background', 'section', 'bars', 'accent'].map(k => html`
+                                    ${Object.entries(editingTheme.values).map(([k, v]) => html`
                                         <div key=${k} className="flex items-center justify-between">
-                                            <div className="flex flex-col capitalize">
-                                                <span className="font-medium text-sm">${k} Color</span>
+                                            <span className="font-mono text-xs text-gray-500">${k}</span>
+                                            <div className="flex items-center gap-2">
+                                                <input type="text" value=${v} onChange=${e => handleThemeValueChange(k, e.target.value)} className="w-24 p-1 text-xs rounded border bg-transparent text-right" />
+                                                <input type="color" value=${v} onChange=${e => handleThemeValueChange(k, e.target.value)} className="h-6 w-8 p-0 border-0 rounded cursor-pointer" />
                                             </div>
-                                            <input type="color" value=${appTheme[themeMode][k]} onChange=${e => handleThemeUpdate(k, e.target.value)} className="h-8 w-14 p-0 border-0 rounded cursor-pointer" />
                                         </div>
                                     `)}
                                 </div>
                                 
                                 <div className="pt-6 border-t border-gray-100 dark:border-gray-800 text-right">
-                                    <button onClick=${async () => {
-                                        const def = {light:{background:'#f1f5f9',section:'#ffffff',accent:'#3b82f6',bars:'#e2e8f0'},dark:{background:'#1e293b',section:'#0f172a',accent:'#60a5fa',bars:'#0f172a'}};
-                                        setLocalAppTheme(def); await setAppTheme(def); onThemeChange();
-                                    }} className="text-sm text-gray-500 underline hover:text-primary">
-                                        Reset to Default Theme
+                                    <button onClick=${saveCurrentTheme} className="px-4 py-2 bg-primary text-white rounded hover:opacity-90">
+                                        Save Theme Changes
                                     </button>
                                 </div>
                             </div>

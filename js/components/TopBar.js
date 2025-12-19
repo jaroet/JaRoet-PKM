@@ -13,12 +13,13 @@
             activeNote, handleFavToggle, setEd, activeHasContent, setRenN, setRen,
             canUnlink, changeRelationship, handleLinkAction,
             search, doSearch, sAct, setSAct, sRes, navSearch,
-            setDark, dark, setSett, exportData, setImpD, setImp, setAllNotes,
-            fontSize, sortOrder, setSortOrder
+            dark, setSett, exportData, setImpD, setImp, setAllNotes,
+            fontSize, sortOrder, setSortOrder, themes, onThemeSelect
         } = props;
 
         const searchRef = useRef(null);
         const [sortDrop, setSortDrop] = useState(false);
+        const [themeDrop, setThemeDrop] = useState(false);
 
         const { useClickOutside, useListNavigation } = J.Hooks;
 
@@ -36,6 +37,7 @@
         // Use the new hook for click-outside behavior
         const favDropdownContainerRef = useClickOutside(favDrop, useCallback(() => setFavDrop(false), []));
         const sortDropdownRef = useClickOutside(sortDrop, useCallback(() => setSortDrop(false), []));
+        const themeDropdownRef = useClickOutside(themeDrop, useCallback(() => setThemeDrop(false), []));
         const searchDropdownContainerRef = useClickOutside(sAct && sRes.length > 0, useCallback(() => {
             setSAct(false);
             searchRef.current?.blur(); // Optionally blur the search input
@@ -101,6 +103,25 @@
                     </div>
 
                     <${Btn} onClick=${() => setAllNotes(true)} icon=${Icons.List} title="All Notes" />
+
+                    <div className="relative">
+                        <${Btn} onClick=${()=>setSortDrop(p=>!p)} icon=${Icons.Sort} title="Sort Order" active=${sortDrop} />
+                        ${sortDrop&&html`
+                            <div 
+                                ref=${sortDropdownRef}
+                                className="absolute top-full left-0 mt-2 w-48 bg-card border border-gray-200 dark:border-gray-700 shadow-xl rounded-md z-50 animate-in fade-in zoom-in-95 duration-100"
+                                onClick=${e => e.stopPropagation()}
+                            >
+                                <div className="p-2 text-xs font-bold uppercase text-gray-500 border-b dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">Sort By</div>
+                                ${sortOptions.map(opt => html`
+                                    <div key=${opt.id} onClick=${()=>{setSortOrder(opt.id);setSortDrop(false)}} className=${`px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer text-sm flex justify-between items-center ${sortOrder===opt.id?'text-primary font-medium':''}`}>
+                                        ${opt.label}
+                                        ${sortOrder===opt.id&&html`<span className="text-xs">✓</span>`}
+                                    </div>
+                                `)}
+                            </div>
+                        `}
+                    </div>
                 </div>
 
                 <${Sep} />
@@ -166,24 +187,22 @@
                 <!-- Right: App Actions -->
                 <div className="flex items-center gap-1">
                     <div className="relative">
-                        <${Btn} onClick=${()=>setSortDrop(p=>!p)} icon=${Icons.Sort} title="Sort Order" active=${sortDrop} />
-                        ${sortDrop&&html`
+                        <${Btn} onClick=${()=>setThemeDrop(p=>!p)} icon=${dark?Icons.Sun:Icons.Moon} title="Select Theme" active=${themeDrop} />
+                        ${themeDrop&&html`
                             <div 
-                                ref=${sortDropdownRef}
+                                ref=${themeDropdownRef}
                                 className="absolute top-full right-0 mt-2 w-48 bg-card border border-gray-200 dark:border-gray-700 shadow-xl rounded-md z-50 animate-in fade-in zoom-in-95 duration-100"
                                 onClick=${e => e.stopPropagation()}
                             >
-                                <div className="p-2 text-xs font-bold uppercase text-gray-500 border-b dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">Sort By</div>
-                                ${sortOptions.map(opt => html`
-                                    <div key=${opt.id} onClick=${()=>{setSortOrder(opt.id);setSortDrop(false)}} className=${`px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer text-sm flex justify-between items-center ${sortOrder===opt.id?'text-primary font-medium':''}`}>
-                                        ${opt.label}
-                                        ${sortOrder===opt.id&&html`<span className="text-xs">✓</span>`}
+                                <div className="p-2 text-xs font-bold uppercase text-gray-500 border-b dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">Select Theme</div>
+                                ${themes.map(t => html`
+                                    <div key=${t.id} onClick=${()=>{onThemeSelect(t.id);setThemeDrop(false)}} className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer text-sm truncate">
+                                        ${t.name}
                                     </div>
                                 `)}
                             </div>
                         `}
                     </div>
-                    <${Btn} onClick=${()=>setDark(!dark)} icon=${dark?Icons.Sun:Icons.Moon} title="Toggle Theme" />
                     <${Btn} onClick=${()=>setSett(true)} icon=${Icons.Settings} title="Settings" />
                     <${Btn} onClick=${exportData} icon=${Icons.Download} title="Export JSON" />
                     <${Btn} onClick=${()=>{const i=document.createElement('input');i.type='file';i.accept='.json';i.onchange=e=>{const f=e.target.files[0];if(f){const r=new FileReader();r.onload=ev=>{setImpD(JSON.parse(ev.target.result));setImp(true);};r.readAsText(f);}};i.click();}} icon=${Icons.Upload} title="Import JSON" />
