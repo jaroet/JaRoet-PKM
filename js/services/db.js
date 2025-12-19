@@ -10,6 +10,7 @@
     class DB extends Dexie{constructor(){super(getCurrentVaultName());
         this.version(1).stores({notes:'id,title,*linksTo,*relatedTo',meta:'key'});
         this.version(2).stores({notes:'id,title,*linksTo,*relatedTo,createdAt,modifiedAt'});
+        this.version(3).stores({notes:'id,title,*linksTo,*relatedTo,createdAt,modifiedAt', themes: 'id'});
     }}
     const db=new DB(); 
 
@@ -23,8 +24,99 @@
             const id=crypto.randomUUID(),now=Date.now();
             await db.notes.add({id,title:'Welcome',content:'# Welcome\n\nStart typing...',linksTo:[],relatedTo:[],isFavorite:false,createdAt:now,modifiedAt:now});
             await db.meta.put({key:'currentCentralNoteId',value:id});await db.meta.put({key:'favoritesList',value:[]});await db.meta.put({key:'homeNoteId',value:id});
-            return id;
-        } return null;
+        }
+        
+        // Seed Themes (Version 3 feature)
+        const defaultThemes = [
+                {
+                    id: 'light', name: 'JaRoet Light', type: 'light',
+                    values: {
+                        '--background': '#f8fafc', '--foreground': '#0f172a', '--card': '#ffffff', '--card-foreground': '#0f172a',
+                        '--primary': '#3b82f6', '--primary-foreground': '#ffffff', '--scrollbar-thumb': '#94a3b8',
+                        '--theme-bg': '#f1f5f9', '--theme-section': '#ffffff', '--theme-bars': '#e2e8f0', '--theme-accent': '#3b82f6'
+                    }
+                },
+                {
+                    id: 'solarized-light', name: 'Solarized Light', type: 'light',
+                    values: {
+                        '--background': '#fdf6e3', '--foreground': '#657b83', '--card': '#eee8d5', '--card-foreground': '#586e75',
+                        '--primary': '#268bd2', '--primary-foreground': '#ffffff', '--scrollbar-thumb': '#93a1a1',
+                        '--theme-bg': '#fdf6e3', '--theme-section': '#eee8d5', '--theme-bars': '#eee8d5', '--theme-accent': '#268bd2'
+                    }
+                },
+                {
+                    id: 'nord-light', name: 'Nord Light', type: 'light',
+                    values: {
+                        '--background': '#eceff4', '--foreground': '#2e3440', '--card': '#e5e9f0', '--card-foreground': '#2e3440',
+                        '--primary': '#5e81ac', '--primary-foreground': '#eceff4', '--scrollbar-thumb': '#d8dee9',
+                        '--theme-bg': '#eceff4', '--theme-section': '#e5e9f0', '--theme-bars': '#d8dee9', '--theme-accent': '#5e81ac'
+                    }
+                },
+                {
+                    id: 'github-light', name: 'GitHub Light', type: 'light',
+                    values: {
+                        '--background': '#ffffff', '--foreground': '#24292f', '--card': '#f6f8fa', '--card-foreground': '#24292f',
+                        '--primary': '#0969da', '--primary-foreground': '#ffffff', '--scrollbar-thumb': '#d0d7de',
+                        '--theme-bg': '#ffffff', '--theme-section': '#f6f8fa', '--theme-bars': '#f6f8fa', '--theme-accent': '#0969da'
+                    }
+                },
+                {
+                    id: 'sepia', name: 'Sepia (Warm)', type: 'light',
+                    values: {
+                        '--background': '#f4ecd8', '--foreground': '#5b4636', '--card': '#e4d8b4', '--card-foreground': '#5b4636',
+                        '--primary': '#d2691e', '--primary-foreground': '#ffffff', '--scrollbar-thumb': '#c0b090',
+                        '--theme-bg': '#f4ecd8', '--theme-section': '#e4d8b4', '--theme-bars': '#e4d8b4', '--theme-accent': '#d2691e'
+                    }
+                },
+                {
+                    id: 'dark', name: 'JaRoet Dark', type: 'dark',
+                    values: {
+                        '--background': '#0f172a', '--foreground': '#f8fafc', '--card': '#1e293b', '--card-foreground': '#f8fafc',
+                        '--primary': '#60a5fa', '--primary-foreground': '#0f172a', '--scrollbar-thumb': '#475569',
+                        '--theme-bg': '#0f172a', '--theme-section': '#1e293b', '--theme-bars': '#0f172a', '--theme-accent': '#60a5fa'
+                    }
+                },
+                {
+                    id: 'dracula', name: 'Dracula', type: 'dark',
+                    values: {
+                        '--background': '#282a36', '--foreground': '#f8f8f2', '--card': '#44475a', '--card-foreground': '#f8f8f2',
+                        '--primary': '#bd93f9', '--primary-foreground': '#282a36', '--scrollbar-thumb': '#6272a4',
+                        '--theme-bg': '#282a36', '--theme-section': '#44475a', '--theme-bars': '#282a36', '--theme-accent': '#bd93f9'
+                    }
+                },
+                {
+                    id: 'monokai', name: 'Monokai', type: 'dark',
+                    values: {
+                        '--background': '#272822', '--foreground': '#f8f8f2', '--card': '#3e3d32', '--card-foreground': '#f8f8f2',
+                        '--primary': '#a6e22e', '--primary-foreground': '#272822', '--scrollbar-thumb': '#75715e',
+                        '--theme-bg': '#272822', '--theme-section': '#3e3d32', '--theme-bars': '#272822', '--theme-accent': '#a6e22e'
+                    }
+                },
+                {
+                    id: 'nord-dark', name: 'Nord Dark', type: 'dark',
+                    values: {
+                        '--background': '#2e3440', '--foreground': '#d8dee9', '--card': '#3b4252', '--card-foreground': '#d8dee9',
+                        '--primary': '#88c0d0', '--primary-foreground': '#2e3440', '--scrollbar-thumb': '#4c566a',
+                        '--theme-bg': '#2e3440', '--theme-section': '#3b4252', '--theme-bars': '#2e3440', '--theme-accent': '#88c0d0'
+                    }
+                },
+                {
+                    id: 'github-dark', name: 'GitHub Dark', type: 'dark',
+                    values: {
+                        '--background': '#0d1117', '--foreground': '#c9d1d9', '--card': '#161b22', '--card-foreground': '#c9d1d9',
+                        '--primary': '#58a6ff', '--primary-foreground': '#0d1117', '--scrollbar-thumb': '#30363d',
+                        '--theme-bg': '#0d1117', '--theme-section': '#161b22', '--theme-bars': '#0d1117', '--theme-accent': '#58a6ff'
+                    }
+                }
+        ];
+
+        const existingIds = new Set(await db.themes.toCollection().primaryKeys());
+        const missing = defaultThemes.filter(t => !existingIds.has(t.id));
+        if(missing.length > 0) await db.themes.bulkAdd(missing);
+        
+        if(!(await db.meta.get('activeThemeId'))) await db.meta.put({key:'activeThemeId', value:'dark'});
+        
+        return (await db.meta.get('currentCentralNoteId'))?.value;
     };
 
     const getNote=(id)=>db.notes.get(id);
@@ -51,10 +143,15 @@
     const setFontSize=(v)=>db.meta.put({key:'fontSize',value:v});
     const getSectionVisibility=async()=>({showFavorites:(await db.meta.get('ui_showFavorites'))?.value??true,showContent:(await db.meta.get('ui_showContent'))?.value??true});
     const setSectionVisibility=(k,v)=>db.meta.put({key:`ui_${k}`,value:v});
-    const getAppTheme=async()=>(await db.meta.get('appTheme'))?.value||{light:{background:'#f1f5f9',section:'#ffffff',accent:'#3b82f6',bars:'#e2e8f0'},dark:{background:'#1e293b',section:'#0f172a',accent:'#60a5fa',bars:'#0f172a'}};
-    const setAppTheme=(v)=>db.meta.put({key:'appTheme',value:v});
-    const getThemeMode=async()=>(await db.meta.get('themeMode'))?.value||'dark';
-    const setThemeMode=(v)=>db.meta.put({key:'themeMode',value:v});
+    
+    // Theme Methods
+    const getThemes = () => db.themes.toArray();
+    const getTheme = (id) => db.themes.get(id);
+    const saveTheme = (theme) => db.themes.put(theme);
+    const deleteTheme = (id) => db.themes.delete(id);
+    const getActiveThemeId = async () => (await db.meta.get('activeThemeId'))?.value || 'dark';
+    const setActiveThemeId = (id) => db.meta.put({key:'activeThemeId', value:id});
+
     const getSortOrder=async()=>(await db.meta.get('ui_sortOrder'))?.value||'title-asc';
     const setSortOrder=(v)=>db.meta.put({key:'ui_sortOrder',value:v});
     const searchNotes = async (q) => {
@@ -113,7 +210,7 @@
         db, getVaultList, getCurrentVaultName, switchVault, createVault, deleteCurrentVault, resetCurrentVault,
         seedDatabase, getNote, findNoteByTitle, getNoteTitlesByPrefix, createNote, updateNote, deleteNote, getNoteCount,
         getTopology, getFavorites, toggleFavorite, getHomeNoteId, setHomeNoteId, getFontSize, setFontSize, getSectionVisibility,
-        setSectionVisibility, getAppTheme, setAppTheme, getThemeMode, setThemeMode,
+        setSectionVisibility, getThemes, getTheme, saveTheme, deleteTheme, getActiveThemeId, setActiveThemeId,
         getSortOrder, setSortOrder,
         searchNotes, getAllNotes, getAllNotesSortedBy, importNotes
     };

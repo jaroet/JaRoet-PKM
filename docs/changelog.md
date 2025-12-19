@@ -3,6 +3,21 @@
 
 All notable changes to the JaRoet PKM project will be documented in this file.
 
+## [0.5.1] - 2024-12-20
+
+### Features
+- **Advanced Theming**: Introduced a full-featured theme editor with live preview. Users can now create, edit, duplicate, and delete custom themes.
+- **New Default Themes**: Added 10 preset themes including Solarized, Nord, GitHub, Dracula, Monokai, and Sepia.
+- **Theme Persistence**: Themes are now stored in the database (`IndexedDB`), allowing for portable and unlimited theme configurations.
+- **UI Improvements**:
+    - **Note Counts**: Section headers now display the count of notes in that section (e.g., "Parents (3)").
+    - **Theme Switcher**: Added a dropdown in the top bar to easily switch between installed themes.
+    - **Settings Modal**: Expanded the settings dialog width for better usability, especially in the theme editor.
+
+### Fixed
+- **Theme Loading**: Ensured custom themes are correctly loaded and applied on application startup.
+- **Favorites Loading**: Fixed an issue where the favorites list was not being loaded from the database upon application startup or refresh.
+
 ## [0.5.0] - 2024-12-19
 
 ### Features

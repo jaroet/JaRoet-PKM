@@ -1,7 +1,7 @@
 
 (function(J) {
     const { useState, useEffect, useRef, useCallback } = React;
-    const { db, getTopology, createNote, updateNote, deleteNote, getFavorites, toggleFavorite, seedDatabase, getNote, getAllNotes, importNotes, getHomeNoteId, searchNotes, getFontSize, getNoteCount, getVaultList, getCurrentVaultName, switchVault, getAppTheme, getSectionVisibility, findNoteByTitle, getNoteTitlesByPrefix, getThemeMode, setThemeMode, getSortOrder, setSortOrder: persistSortOrder } = J.Services.DB;
+    const { db, getTopology, createNote, updateNote, deleteNote, getFavorites, toggleFavorite, seedDatabase, getNote, getAllNotes, importNotes, getHomeNoteId, searchNotes, getFontSize, getNoteCount, getVaultList, getCurrentVaultName, switchVault, getSectionVisibility, findNoteByTitle, getNoteTitlesByPrefix, getSortOrder, setSortOrder: persistSortOrder, getActiveThemeId, getTheme, setActiveThemeId, getThemes } = J.Services.DB;
     const { goToDate, goToToday, getDateSubtitle } = J.Services.Journal; 
     const { createRenderer, wikiLinkExtension } = J.Services.Markdown;
     const { NoteCard, LinkerModal, Editor, SettingsModal, ImportModal, RenameModal, NoteSection, TopBar, StatusBar, Icons, AllNotesModal, VaultChooser, APP_VERSION } = J;
@@ -12,7 +12,7 @@
     J.App = () => {
         // --- State ---
         const {currentId,visit,replace,back,forward,canBack,canForward}=useHistory();
-        const [topo,setTopo]=useState({center:null,uppers:[],downers:[],lefters:[],righters:[]}),[favs,setFavs]=useState([]),[dark,setDark]=useState(true),[fs,setFs]=useState(16),[vis,setVis]=useState({showFavorites:true,showContent:true}),[count,setCount]=useState(0);
+        const [topo,setTopo]=useState({center:null,uppers:[],downers:[],lefters:[],righters:[]}),[favs,setFavs]=useState([]),[dark,setDark]=useState(true),[fs,setFs]=useState(16),[vis,setVis]=useState({showFavorites:true,showContent:true}),[count,setCount]=useState(0),[themes,setThemes]=useState([]);
         const [sortOrder, setSortOrder] = useState('title-asc');
         
         // Navigation State
@@ -50,24 +50,23 @@
                 replace(currentNoteId);
                 getFontSize().then(setFs);
                 getSectionVisibility().then(setVis);
-                getThemeMode().then(mode => setDark(mode === 'dark'));
                 getSortOrder().then(setSortOrder);
+                getFavorites().then(setFavs);
+                getThemes().then(setThemes);
+                
+                // Load Theme
+                const tId = await getActiveThemeId();
+                const theme = await getTheme(tId) || await getTheme('dark');
+                if(theme) applyTheme(theme);
             };
             init();},[]);
-        useEffect(()=>{document.documentElement.classList.toggle('dark',dark);},[dark]);
-        useEffect(()=>{
-            getAppTheme().then(t=>{
-                const c=dark?t.dark:t.light;
-                document.documentElement.style.setProperty('--background',c.background);
-                document.documentElement.style.setProperty('--card',c.section);
-                document.documentElement.style.setProperty('--primary',c.accent);
-                document.documentElement.style.setProperty('--card-foreground', dark ? '#f8fafc' : '#0f172a');
-                
-                // Set Theme variables for style.css usage if needed, though most handle it via class
-                document.documentElement.style.setProperty('--theme-bars', c.bars);
-                document.documentElement.style.setProperty('--theme-section', c.section);
-            });
-        },[dark, count]);
+
+        const applyTheme = (theme) => {
+            setDark(theme.type === 'dark');
+            document.documentElement.classList.toggle('dark', theme.type === 'dark');
+            const root = document.documentElement;
+            Object.entries(theme.values).forEach(([k, v]) => root.style.setProperty(k, v));
+        };
 
         useEffect(()=>{
             if(currentId){
@@ -306,10 +305,11 @@
                     deleteNote=${deleteNote} currentId=${currentId} canUnlink=${canUnlink} changeRelationship=${changeRelationship} handleLinkAction=${handleLinkAction}
                     search=${search} doSearch=${doSearch} sAct=${sAct} setSAct=${setSAct} sRes=${sRes} sIdx=${sIdx} setSIdx=${setSIdx} navSearch=${navSearch}
                     setAllNotes=${setAllNotes}
-                    setDark=${(isDark) => {
-                        setDark(isDark);
-                        setThemeMode(isDark ? 'dark' : 'light');
-                    }} 
+                    onThemeSelect=${async (id) => {
+                        const t = await getTheme(id);
+                        if(t) { await setActiveThemeId(id); applyTheme(t); }
+                    }}
+                    themes=${themes}
                     dark=${dark} setSett=${setSett} exportData=${exportData} setImpD=${setImpD} setImp=${setImp} fontSize=${fs}
                     sortOrder=${sortOrder} setSortOrder=${(o)=>{setSortOrder(o);persistSortOrder(o);}}
                 />
@@ -325,12 +325,12 @@
                         <!-- Left Col -->
                         <div className="flex flex-col gap-3 w-1/4">
                             <div className=${`${vis.showFavorites?'flex-1':'h-full'} relative bg-card rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0`}>
-                                <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Related</div>
+                                <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Related (${topo.lefters.length})</div>
                                 <${NoteSection} notes=${sortNotes(topo.lefters)} section="left" containerClasses="absolute inset-0 flex flex-col gap-0 overflow-y-auto p-3 custom-scrollbar rounded-3xl pt-6" itemClasses="w-full" containerId="container-left" ...${sp} />
                             </div>
                             ${vis.showFavorites&&html`
                                 <div className="flex-1 relative bg-card rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
-                                    <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Favorites</div>
+                                    <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Favorites (${favs.length})</div>
                                     <${NoteSection} notes=${sortNotes(favs)} section="favs" containerClasses="absolute inset-0 flex flex-col gap-0 overflow-y-auto p-3 custom-scrollbar rounded-3xl pt-6" itemClasses="w-full" containerId="container-favs" ...${sp} />
                                 </div>
                             `}
@@ -340,7 +340,7 @@
                         <div className="flex flex-col gap-3 w-1/2">
                             <div className="flex-1 flex flex-col gap-3 min-h-0">
                                 <div className="flex-[7] relative bg-card rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
-                                    <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Parents</div>
+                                    <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Parents (${topo.uppers.length})</div>
                                     <div className="absolute inset-0 overflow-x-auto overflow-y-hidden custom-scrollbar rounded-3xl pt-6">
                                         <${NoteSection} notes=${sortNotes(topo.uppers)} section="up" containerClasses="h-full w-fit flex flex-col flex-wrap content-start gap-0 p-3 mx-auto" itemClasses="w-[300px] flex-shrink-0" containerId="container-up" ...${sp} />
                                     </div>
@@ -357,7 +357,7 @@
                                 </div>
                             </div>
                             <div className="flex-1 relative bg-card rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
-                                <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Children</div>
+                                <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Children (${topo.downers.length})</div>
                                 <div className="absolute inset-0 overflow-x-auto overflow-y-hidden custom-scrollbar rounded-3xl pt-6">
                                     <${NoteSection} notes=${sortNotes(topo.downers)} section="down" containerClasses="h-full w-fit flex flex-col flex-wrap content-start gap-0 p-3 mx-auto" itemClasses="w-[300px] flex-shrink-0" containerId="container-down" ...${sp} />
                                 </div>
@@ -367,7 +367,7 @@
                         <!-- Right Col -->
                         <div className="flex flex-col gap-3 w-1/4">
                             <div className=${`${vis.showContent?'flex-1':'h-full'} relative bg-card rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0`}>
-                                <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Siblings</div>
+                                <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Siblings (${topo.righters.length})</div>
                                 <${NoteSection} notes=${sortNotes(topo.righters)} section="right" containerClasses="flex flex-col gap-0 overflow-y-auto p-3 h-full custom-scrollbar rounded-3xl pt-6" itemClasses="w-full" containerId="container-right" ...${sp} />
                             </div>
                             ${vis.showContent&&html`
@@ -405,7 +405,12 @@
                     }}
                 />
                 <${LinkerModal} isOpen=${lnk} type=${lnkType} onClose=${()=>setLnk(false)} onSelect=${handleLink} sourceNoteId=${getFocusedNote()?.id || currentId} />
-                <${SettingsModal} isOpen=${sett.open || sett === true} onClose=${()=>setSett(false)} currentCentralNoteId=${currentId} fontSize=${fs} onFontSizeChange=${setFs} onThemeChange=${()=>setCount(c=>c+1)} onSettingsChange=${()=>getSectionVisibility().then(setVis)} initialTab=${sett.initialTab} focusOn=${sett.focusOn} />
+                <${SettingsModal} isOpen=${sett.open || sett === true} onClose=${()=>setSett(false)} currentCentralNoteId=${currentId} fontSize=${fs} onFontSizeChange=${setFs} onThemeChange=${async ()=>{
+                    const tId = await getActiveThemeId();
+                    const t = await getTheme(tId);
+                    if(t) applyTheme(t);
+                    getThemes().then(setThemes);
+                }} onSettingsChange=${()=>getSectionVisibility().then(setVis)} initialTab=${sett.initialTab} focusOn=${sett.focusOn} />
                 <${ImportModal} isOpen=${imp} importData=${impD} onClose=${()=>setImp(false)} onConfirm=${async m=>{await importNotes(impD,m);setImp(false);window.location.reload()}} />
                 <${RenameModal} isOpen=${ren} currentTitle=${renN?renN.title:''} onClose=${()=>setRen(false)} onRename=${t=>{updateNote(renN.id,{title:t});setRen(false);getTopology(currentId).then(setTopo);}} />
                 <${AllNotesModal} isOpen=${allNotes} onClose=${()=>setAllNotes(false)} onSelect=${id=>{setAllNotes(false);nav(id);}} />
