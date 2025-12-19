@@ -325,12 +325,12 @@
                         <!-- Left Col -->
                         <div className="flex flex-col gap-3 w-1/4">
                             <div className=${`${vis.showFavorites?'flex-1':'h-full'} relative bg-card rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0`}>
-                                <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Related</div>
+                                <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Related (${topo.lefters.length})</div>
                                 <${NoteSection} notes=${sortNotes(topo.lefters)} section="left" containerClasses="absolute inset-0 flex flex-col gap-0 overflow-y-auto p-3 custom-scrollbar rounded-3xl pt-6" itemClasses="w-full" containerId="container-left" ...${sp} />
                             </div>
                             ${vis.showFavorites&&html`
                                 <div className="flex-1 relative bg-card rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
-                                    <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Favorites</div>
+                                    <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Favorites (${favs.length})</div>
                                     <${NoteSection} notes=${sortNotes(favs)} section="favs" containerClasses="absolute inset-0 flex flex-col gap-0 overflow-y-auto p-3 custom-scrollbar rounded-3xl pt-6" itemClasses="w-full" containerId="container-favs" ...${sp} />
                                 </div>
                             `}
@@ -340,7 +340,7 @@
                         <div className="flex flex-col gap-3 w-1/2">
                             <div className="flex-1 flex flex-col gap-3 min-h-0">
                                 <div className="flex-[7] relative bg-card rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
-                                    <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Parents</div>
+                                    <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Parents (${topo.uppers.length})</div>
                                     <div className="absolute inset-0 overflow-x-auto overflow-y-hidden custom-scrollbar rounded-3xl pt-6">
                                         <${NoteSection} notes=${sortNotes(topo.uppers)} section="up" containerClasses="h-full w-fit flex flex-col flex-wrap content-start gap-0 p-3 mx-auto" itemClasses="w-[300px] flex-shrink-0" containerId="container-up" ...${sp} />
                                     </div>
@@ -357,7 +357,7 @@
                                 </div>
                             </div>
                             <div className="flex-1 relative bg-card rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
-                                <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Children</div>
+                                <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Children (${topo.downers.length})</div>
                                 <div className="absolute inset-0 overflow-x-auto overflow-y-hidden custom-scrollbar rounded-3xl pt-6">
                                     <${NoteSection} notes=${sortNotes(topo.downers)} section="down" containerClasses="h-full w-fit flex flex-col flex-wrap content-start gap-0 p-3 mx-auto" itemClasses="w-[300px] flex-shrink-0" containerId="container-down" ...${sp} />
                                 </div>
@@ -367,7 +367,7 @@
                         <!-- Right Col -->
                         <div className="flex flex-col gap-3 w-1/4">
                             <div className=${`${vis.showContent?'flex-1':'h-full'} relative bg-card rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0`}>
-                                <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Siblings</div>
+                                <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Siblings (${topo.righters.length})</div>
                                 <${NoteSection} notes=${sortNotes(topo.righters)} section="right" containerClasses="flex flex-col gap-0 overflow-y-auto p-3 h-full custom-scrollbar rounded-3xl pt-6" itemClasses="w-full" containerId="container-right" ...${sp} />
                             </div>
                             ${vis.showContent&&html`
