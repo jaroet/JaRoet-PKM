@@ -52,6 +52,7 @@
                 getSectionVisibility().then(setVis);
                 getThemeMode().then(mode => setDark(mode === 'dark'));
                 getSortOrder().then(setSortOrder);
+                getFavorites().then(setFavs);
             };
             init();},[]);
         useEffect(()=>{document.documentElement.classList.toggle('dark',dark);},[dark]);
