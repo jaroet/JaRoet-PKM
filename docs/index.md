@@ -1,4 +1,4 @@
-[Github repository](https://github.com/jaroet/jaroet-pkm)  |  [Github Discussions](https://github.com/jaroet/JaRoet-PKM/discussions)  |  [Github Issues](https://github.com/jaroet/JaRoet-PKM/issues)
+[Github repository](https://github.com/jaroet/jaroet-pkm)  |  [Github Discussions](https://github.com/jaroet/JaRoet-PKM/discussions)  |  [Github Issues](https://github.com/jaroet/JaRoet-PKM/issues)  |  [About me](https://jaroet.github.io) 
 
 JaRoet PKM is a fast, local-first Personal Knowledge Management tool designed for keyboard power users. It moves away from traditional folder structures, organizing your notes based on their relationships (Parents, Children, Siblings, and Related items). This creates a natural "topology" of thought that you can navigate fluidly. 
 
