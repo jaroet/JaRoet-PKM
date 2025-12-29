@@ -7,7 +7,7 @@
     <title>JaRoet PKM</title>
     
     <!-- STYLING -->
-    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+    <script src="js/libs/tailwindcss.js"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -28,11 +28,11 @@
     <link rel="stylesheet" href="css/style.css">
 
     <!-- DEPENDENCIES -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.min.js"></script>
-    <script src="https://unpkg.com/marked@9.1.2/marked.min.js"></script>
-    <script src="https://unpkg.com/htm@3.1.1/dist/htm.umd.js"></script>
+    <script src="js/libs/react.production.min.js"></script>
+    <script src="js/libs/react-dom.production.min.js"></script>
+    <script src="js/libs/dexie.min.js"></script>
+    <script src="js/libs/marked.min.js"></script>
+    <script src="js/libs/htm.umd.js"></script>
 
     <!-- APP SCRIPTS (Order Matters) -->
     <script src="js/globals.js"></script>
@@ -63,7 +63,13 @@
     <script src="js/App.js"></script>
 </head>
 <body>
-    <div id="root"></div>
+    <div id="root">
+        <!-- Fallback UI: Visible only if React fails to load (e.g. no internet for CDNs) -->
+        <div style="height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: sans-serif; color: #666; text-align: center; padding: 20px;">
+            <h2 style="margin-bottom: 10px; color: #333;">Loading JaRoet PKM...</h2>
+            <p>If the application does not start, please check if all library files are present in js/libs/.</p>
+        </div>
+    </div>
     <script>
         // Initialize App
         const root = ReactDOM.createRoot(document.getElementById('root'));
