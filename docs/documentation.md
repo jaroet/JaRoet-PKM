@@ -1,6 +1,6 @@
 # JaRoet PKM Documentation
 
-**JaRoet PKM** is a local-first, keyboard-centric personal knowledge management system designed for speed and fluidity. Unlike traditional note-taking apps that use folders, JaRoet uses a **Topological** approach. Notes are organized by their relationships to one another (Parents, Children, Siblings, Related), allowing you to traverse your knowledge graph naturally.
+**JaRoet PKM** is a free, local, keyboard-centric personal knowledge management system designed for speed and fluidity. Unlike traditional note-taking apps that use folders, JaRoet uses a **Topological** approach. Notes are organized by their relationships to one another (Parents, Children, Siblings, Related), allowing you to traverse your knowledge graph naturally.
 
 ## Interface Overview
 

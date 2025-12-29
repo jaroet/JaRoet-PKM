@@ -4,6 +4,7 @@
     const { db, getTopology, createNote, updateNote, deleteNote, getFavorites, toggleFavorite, seedDatabase, getNote, getAllNotes, importNotes, getHomeNoteId, searchNotes, getFontSize, getNoteCount, getVaultList, getCurrentVaultName, switchVault, getSectionVisibility, findNoteByTitle, getNoteTitlesByPrefix, getSortOrder, setSortOrder: persistSortOrder, getActiveThemeId, getTheme, setActiveThemeId, getThemes } = J.Services.DB;
     const { goToDate, goToToday, getDateSubtitle } = J.Services.Journal; 
     const { createRenderer, wikiLinkExtension } = J.Services.Markdown;
+    const { requestPersistence } = J.Services.Persistence;
     const { NoteCard, LinkerModal, Editor, SettingsModal, ImportModal, RenameModal, NoteSection, TopBar, StatusBar, Icons, AllNotesModal, VaultChooser, APP_VERSION } = J;
     const { useHistory } = J.Hooks;
 
@@ -45,6 +46,7 @@
         // --- Effects & Sync ---
         useEffect(()=>{
             const init = async () => {
+                await requestPersistence();
                 const initialId = await seedDatabase();
                 const currentNoteId = (await db.meta.get('currentCentralNoteId'))?.value || initialId;
                 replace(currentNoteId);

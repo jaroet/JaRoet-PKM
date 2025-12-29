@@ -7,6 +7,7 @@
         setHomeNoteId, setFontSize: dbSetFontSize, getThemes, getTheme, saveTheme, deleteTheme, getActiveThemeId, setActiveThemeId,
         setSectionVisibility, getCurrentVaultName, searchNotes 
     } = J.Services.DB;
+    const { checkPersistence, requestPersistence } = J.Services.Persistence;
 
     J.SettingsModal = ({isOpen, onClose, currentCentralNoteId, fontSize, onFontSizeChange, onThemeChange, onSettingsChange, initialTab, focusOn}) => {
         // State
@@ -26,6 +27,7 @@
         const [curVault, setCurVault] = useState('');
         const [dbLocation, setDbLocation] = useState('');
         const newVaultInputRef = useRef(null);
+        const [isPersisted, setIsPersisted] = useState(false);
 
         // Initialize
         useEffect(() => {
@@ -68,6 +70,7 @@
                     setCurThemeId(active);
                     const t = ts.find(x => x.id === active);
                     if(t) setEditingTheme(JSON.parse(JSON.stringify(t)));
+                    checkPersistence().then(setIsPersisted);
                 };
                 init();
             }
@@ -341,6 +344,19 @@
                                     <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded mb-4 border border-gray-200 dark:border-gray-700">
                                         <div className="text-xs text-gray-500 mb-1">Active Vault</div>
                                         <div className="font-mono font-bold text-lg text-primary truncate">${curVault}</div>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Storage Persistence</h3>
+                                    <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded mb-4 border border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                                        <div>
+                                            <div className="text-xs text-gray-500 mb-1">Browser Eviction Protection</div>
+                                            <div className=${`font-bold text-sm ${isPersisted ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'}`}>
+                                                ${isPersisted ? 'Persistent (Protected)' : 'Best Effort (Risk of Eviction)'}
+                                            </div>
+                                        </div>
+                                        ${!isPersisted && html`<button onClick=${async () => { const res = await requestPersistence(); setIsPersisted(res); }} className="px-3 py-1 bg-primary text-white text-xs rounded hover:opacity-90">Enable</button>`}
                                     </div>
                                 </div>
 
