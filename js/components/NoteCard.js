@@ -51,7 +51,7 @@
                             ? 'inset 0 0 0 2px color-mix(in srgb, var(--primary) 30%, transparent)'
                             : undefined
                 }}
-                className=${`relative group flex items-center px-3 py-1.5 rounded-md cursor-pointer select-none transition-all duration-150 truncate flex-shrink-0 text-foreground ${isFocused ? 'z-10 shadow-sm font-medium' : 'hover:bg-foreground/5 opacity-90 hover:opacity-100'} ${className || ''}`}
+                className=${`relative group flex items-center px-3 py-1 rounded-md cursor-pointer select-none transition-all duration-150 truncate flex-shrink-0 text-foreground ${isFocused ? 'z-10 shadow-sm font-medium' : 'hover:bg-foreground/5 opacity-90 hover:opacity-100'} ${className || ''}`}
             >
                 <span className="truncate flex-1">${note.title}</span>
                 ${isSelected && html`
