@@ -3,6 +3,11 @@
 
 All notable changes to the JaRoet PKM project will be documented in this file.
 
+## [0.5.2] - 2024-12-21
+
+### Changed
+- **Offline Support**: The application now loads all core dependencies (React, Tailwind, Dexie, etc.) from local files instead of CDNs. This ensures the app works completely offline.
+
 ## [0.5.1] - 2024-12-20
 
 ### Features
