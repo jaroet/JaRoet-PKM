@@ -3,7 +3,17 @@
 
 All notable changes to the JaRoet PKM project will be documented in this file.
 
-## [0.5.1] - 2024-12-20
+## [0.5.2] - 2026-01-06
+
+### Features
+- **Offline Capability**: The application now uses local JavaScript libraries (`js/libs`) by default, allowing fully offline usage without an internet connection. A fallback mechanism automatically loads libraries from a CDN if local files are missing.
+- **Data Persistence**: Added an automatic request for persistent storage permissions to prevent the browser from evicting data when disk space is low. Manually cleaning up browser data will still remove you vault, **DON'T DO THAT!!!**
+- **Random Note**: Added a "Random Note" button to the top bar and a hotkey (`Ctrl+Alt+R`) to jump to a random note in the vault.
+- **Status Bar Indicators**: 
+    - Added a visual indicator (Checkmark/Cross) to show if the storage is persistent.
+    - The vault name turns red if the application is running in CDN fallback mode.
+
+## [0.5.1] - 2025-12-18
 
 ### Features
 - **Advanced Theming**: Introduced a full-featured theme editor with live preview. Users can now create, edit, duplicate, and delete custom themes.

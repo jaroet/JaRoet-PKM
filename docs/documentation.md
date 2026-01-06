@@ -22,30 +22,53 @@ The main view is divided into three columns, representing the "Topology" (surrou
 
 ---
 
-## Top Bar Icons (Left to Right)
+## Top Bar Interface
 
-| Icon | Name | Function |
+The top bar provides quick access to navigation, note actions, and application tools.
+
+### Navigation (Left)
+| Icon | Action | Shortcut | Description |
+| :--- | :--- | :--- | :--- |
+| **< / >** | **Back / Forward** | `Alt + ←` / `→` | Navigate through your history. |
+| **🏠** | **Home** | | Jump to your configured Home note. |
+| **📅** | **Journal** | `Ctrl + J` | Jump to today's note. Creates date hierarchy automatically. |
+| **⭐ (List)** | **Favorites** | | Dropdown list of pinned notes. |
+| **☰ (List)** | **All Notes** | | Open a modal to browse/filter all notes in the vault. |
+| **🔀** | **Random** | `Ctrl + Alt + R` | Jump to a random note. |
+| **Sort** | **Sort Order** | | Change sorting (Title, Created, Modified). |
+
+### Active Note Actions (Center)
+| Icon | Action | Shortcut | Description |
+| :--- | :--- | :--- | :--- |
+| **⭐** | **Favorite** | | Toggle favorite status for the focused note. |
+| **📝** | **Edit** | `Ctrl + Enter` | Open the Markdown Editor. |
+| **I** | **Rename** | `F2` | Rename the focused note. |
+| **🗑️** | **Delete** | `Ctrl + Backspace` | Delete focused note(s). |
+
+### Linking Tools (Right)
+| Icon | Action | Shortcut | Description |
+| :--- | :--- | :--- | :--- |
+| **🔗⃠** | **Unlink** | `Backspace` | Remove link between focused note and center note. |
+| **←** | **Link Related** | `Ctrl + ←` | Link as Related (Side-by-side). |
+| **↑** | **Link Parent** | `Ctrl + ↑` | Link as Parent (Up). |
+| **↓** | **Link Child** | `Ctrl + ↓` | Link as Child (Down). |
+
+### App Tools (Far Right)
+| Icon | Action | Description |
 | :--- | :--- | :--- |
-| **☰** | **Menu** | Open the main menu to access **Settings**, **Themes**, **Vault Switching**, and **Import/Export**. |
-| **🏠** | **Home** | Navigate instantly to your designated Home note. |
-| **📅** | **Journal** | Jump to today's daily note. Creates the `YYYY > YYYY-MM > YYYY-MM-DD` hierarchy automatically. |
-| **⭐ (List)** | **Favorites List** | A dropdown menu showing all your favorite notes. |
-| **⭐** | **Toggle Favorite** | Pin/Unpin the current note to your Favorites list. |
-| **👁️ / 📝** | **View/Edit** | Open the Markdown Editor for the active note (`Shift + Enter` or `Ctrl + Enter`). |
-| **F2** | **Rename** | Rename the active note (`F2`). |
-| **🗑️** | **Delete** | Delete the active note or all selected notes (`Ctrl + Backspace`). |
-| **🔗⃠** | **Unlink** | Break the connection between the selected note(s) and the active note (`Backspace`). |
-| **←** | **Link Related** | Link selected note(s) as **Related** (`Ctrl + Left`). |
-| **↑** | **Link Parent** | Link selected note(s) as **Parents** (`Ctrl + Up`). |
-| **↓** | **Link Child** | Link selected note(s) as **Children** (`Ctrl + Down`). |
-| **Search** | **Search Bar** | Type to search for notes (`/`). |
+| **/☀️** | **Theme** | Toggle Light/Dark mode or select a specific theme. |
+| **⚙️** | **Settings** | Configure font size, visibility, and database options. |
+| **⬇️** | **Export** | Download vault as JSON. |
+| **⬆️** | **Import** | Import notes from JSON. |
 
 ---
 
 ## Status Bar
 Located at the bottom of the screen.
 *   **Notes**: Total number of notes in the current vault.
-*   **DB**: Name of the current vault and App Version.
+*   **Vault Name**: Click to switch vaults. *Red text indicates CDN Fallback Mode (offline files missing).*
+*   **Persistence**: A checkmark (✓) indicates data is protected from browser eviction. A cross (✕) means storage is temporary.
+*   **Version**: Click to view release notes on GitHub.
 *   **Hints**: Quick reminders for common keyboard shortcuts.
 
 ---
@@ -57,10 +80,12 @@ JaRoet PKM is designed to be used primarily with the keyboard.
 ### Navigation
 *   **Arrow Keys**: Move focus between notes and sections. 
     *   *Note*: In list views, Left/Right keys navigate columns first before jumping sections.
+*   **Alt + Left / Right**: Navigate Back and Forward in history.
 *   **Enter**: Recenter the focus on the currently **Active Center Note**.
 *   **Space**: Navigate into the currently focused note (Make it the new **Active Center Note**).
 *   **/**: Focus the Search bar.
 *   **Esc**: Close modals, search, or clear selection.
+*   **Ctrl + Alt + R**: Go to a Random Note.
 
 ### Selection
 *   **x**: Toggle selection of the focused note and automatically move to the next one (useful for rapid multi-selection).
@@ -116,7 +141,7 @@ The editor supports Github Flavored Markdown (GFM) and WikiLinks.
 ---
 
 ## Settings
-Accessible via the Main Menu (☰).
+Accessible via the Settings icon (⚙️) in the top right.
 
 *   **General**:
     *   **Font Size**: Adjust the interface text size.
