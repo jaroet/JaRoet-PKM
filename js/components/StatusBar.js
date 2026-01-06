@@ -7,6 +7,8 @@
             return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
         };
 
+        const isFallback = window.JaroetFallbackMode;
+
         return html`
             <div 
                 style=${{ fontSize: `${Math.max(12, fontSize - 2)}px` }} 
@@ -15,7 +17,7 @@
                 <div className="flex-shrink-0 opacity-90 flex items-center gap-1">
                     <span>Notes: <b>${noteCount}</b></span>
                     <span className="mx-2 opacity-50">|</span>
-                    <button onClick=${onVaultClick} className="font-semibold text-primary truncate max-w-[150px] underline hover:opacity-80">${vaultName}</button>
+                    <button onClick=${onVaultClick} className=${`font-semibold truncate max-w-[150px] underline hover:opacity-80 ${isFallback ? 'text-red-600' : 'text-primary'}`} title=${isFallback ? 'Running in CDN Fallback Mode' : ''}>${vaultName}</button>
                     <span className="mx-2 opacity-50">|</span>
                     <a href="https://github.com/jaroet/JaRoet-PKM/releases" target="_blank" rel="noopener noreferrer" className="opacity-70 hover:opacity-100 hover:text-primary hover:underline transition-all">
                         v${version}
