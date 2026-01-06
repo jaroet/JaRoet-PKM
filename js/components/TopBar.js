@@ -13,7 +13,7 @@
             activeNote, handleFavToggle, setEd, activeHasContent, setRenN, setRen,
             canUnlink, changeRelationship, handleLinkAction,
             search, doSearch, sAct, setSAct, sRes, navSearch,
-            dark, setSett, exportData, setImpD, setImp, setAllNotes,
+            dark, setSett, exportData, setImpD, setImp, setAllNotes, goToRandomNote,
             fontSize, sortOrder, setSortOrder, themes, onThemeSelect
         } = props;
 
@@ -103,6 +103,7 @@
                     </div>
 
                     <${Btn} onClick=${() => setAllNotes(true)} icon=${Icons.List} title="All Notes" />
+                    <${Btn} onClick=${goToRandomNote} icon=${Icons.Shuffle} title="Random Note (Ctrl+Alt+R)" />
 
                     <div className="relative">
                         <${Btn} onClick=${()=>setSortDrop(p=>!p)} icon=${Icons.Sort} title="Sort Order" active=${sortDrop} />
