@@ -6,8 +6,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>JaRoet PKM</title>
     
+    <script>
+        window.JaroetFallbackMode = false;
+        function fallback(cdnUrl) {
+            console.warn('Local file missing. Falling back to CDN: ' + cdnUrl);
+            window.JaroetFallbackMode = true;
+            document.write('<script src="' + cdnUrl + '"><\/script>');
+        }
+    </script>
     <!-- STYLING -->
-    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+    <script src="js/libs/tailwindcss.js"></script>
+    <script>if(typeof tailwind === 'undefined') fallback('https://cdn.tailwindcss.com?plugins=typography');</script>
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -28,11 +37,16 @@
     <link rel="stylesheet" href="css/style.css">
 
     <!-- DEPENDENCIES -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.min.js"></script>
-    <script src="https://unpkg.com/marked@9.1.2/marked.min.js"></script>
-    <script src="https://unpkg.com/htm@3.1.1/dist/htm.umd.js"></script>
+    <script src="js/libs/react.production.min.js"></script>
+    <script>if(typeof React === 'undefined') fallback('https://unpkg.com/react@18/umd/react.production.min.js');</script>
+    <script src="js/libs/react-dom.production.min.js"></script>
+    <script>if(typeof ReactDOM === 'undefined') fallback('https://unpkg.com/react-dom@18/umd/react-dom.production.min.js');</script>
+    <script src="js/libs/dexie.min.js"></script>
+    <script>if(typeof Dexie === 'undefined') fallback('https://unpkg.com/dexie@3.2.4/dist/dexie.min.js');</script>
+    <script src="js/libs/marked.min.js"></script>
+    <script>if(typeof marked === 'undefined') fallback('https://unpkg.com/marked@9.1.2/marked.min.js');</script>
+    <script src="js/libs/htm.umd.js"></script>
+    <script>if(typeof htm === 'undefined') fallback('https://unpkg.com/htm@3.1.1/dist/htm.umd.js');</script>
 
     <!-- APP SCRIPTS (Order Matters) -->
     <script src="js/globals.js"></script>

@@ -134,6 +134,15 @@
         const nav=(id)=>visit(id);
         const togSel=(id)=>id!==currentId&&setSel(p=>{const n=new Set(p);n.has(id)?n.delete(id):n.add(id);return n;});
         
+        const goToRandomNote = async () => {
+            const c = await getNoteCount();
+            if (c > 0) {
+                const offset = Math.floor(Math.random() * c);
+                const note = await db.notes.offset(offset).first();
+                if (note) nav(note.id);
+            }
+        };
+
         const handleLink = async (tid, t) => {
             const focusedNote = getFocusedNote();
             const aid = focusedNote ? focusedNote.id : currentId;
@@ -231,6 +240,7 @@
             if (e.altKey && e.key === 'ArrowRight') { e.preventDefault(); forward(); return; }
             if (e.key === '/') { e.preventDefault(); setSAct(true); setTimeout(()=>document.querySelector('input[placeholder="Search..."]')?.focus(), 50); return; }
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') { e.preventDefault(); nav(await goToToday()); return; }
+            if ((e.ctrlKey || e.metaKey) && e.altKey && (e.code === 'KeyR' || e.key.toLowerCase() === 'r')) { e.preventDefault(); goToRandomNote(); return; }
             if (e.key === 'x') {
                 e.preventDefault(); const note = (fSecState==='center'||fSecState==='content') ? topoState.center : getSortedNotes(fSecState, topoState, favsState)[fIdxState];
                 if (note && note.id !== currentId) { togSel(note.id); const list = getSortedNotes(fSecState, topoState, favsState); if (fIdxState < list.length - 1) setFIdx(p=>p+1); } return;
@@ -289,7 +299,7 @@
                 else if(fSecState==='up'){ setFSec('right'); setFIdx(Math.min(secIndState.right, topo.righters.length-1)); }
                 else if(fSecState==='down'){ if(vis.showContent){ setFSec('content'); } else if(topo.righters.length){ setFSec('right'); setFIdx(Math.min(secIndState.right, topo.righters.length-1)); } }
             }
-        }, [currentId, back, forward, sRes, sIdx, sAct, ren, ed, lnk, sett, imp, cal, favDrop]);
+        }, [currentId, back, forward, sRes, sIdx, sAct, ren, ed, lnk, sett, imp, cal, favDrop, goToRandomNote]);
 
         const handleKeyDownRef = useRef(handleGlobalKeyDown);
         useEffect(() => { handleKeyDownRef.current = handleGlobalKeyDown; }, [handleGlobalKeyDown]);
@@ -305,6 +315,7 @@
                     deleteNote=${deleteNote} currentId=${currentId} canUnlink=${canUnlink} changeRelationship=${changeRelationship} handleLinkAction=${handleLinkAction}
                     search=${search} doSearch=${doSearch} sAct=${sAct} setSAct=${setSAct} sRes=${sRes} sIdx=${sIdx} setSIdx=${setSIdx} navSearch=${navSearch}
                     setAllNotes=${setAllNotes}
+                    goToRandomNote=${goToRandomNote}
                     onThemeSelect=${async (id) => {
                         const t = await getTheme(id);
                         if(t) { await setActiveThemeId(id); applyTheme(t); }

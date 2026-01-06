@@ -14,6 +14,17 @@
     }}
     const db=new DB(); 
 
+    // Request persistent storage to prevent eviction
+    if (navigator.storage && navigator.storage.persist) {
+        navigator.storage.persisted().then(persisted => {
+            if (!persisted) {
+                navigator.storage.persist().then(granted => {
+                    console.log(`Storage persistence: ${granted ? 'granted' : 'denied'}`);
+                });
+            }
+        });
+    }
+
     const switchVault=(n)=>{if(getVaultList().includes(n)){localStorage.setItem(CV,n);window.location.reload();}};
     const createVault=(n)=>{const l=getVaultList(),s=n.trim();if(s&&!l.includes(s)){l.push(s);localStorage.setItem(VL,JSON.stringify(l));localStorage.setItem(CV,s);window.location.reload();}};
     const deleteCurrentVault=async()=>{const c=getCurrentVaultName();db.close();await Dexie.delete(c);let l=getVaultList().filter(v=>v!==c);if(!l.length)l.push(DV);localStorage.setItem(VL,JSON.stringify(l));localStorage.setItem(CV,l[0]);window.location.reload();};
