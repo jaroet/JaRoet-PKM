@@ -165,6 +165,11 @@
 
     const getSortOrder=async()=>(await db.meta.get('ui_sortOrder'))?.value||'title-asc';
     const setSortOrder=(v)=>db.meta.put({key:'ui_sortOrder',value:v});
+
+    // Attachment Aliases
+    const getAttachmentAliases = async () => (await db.meta.get('attachmentAliases'))?.value || [];
+    const saveAttachmentAliases = (aliases) => db.meta.put({ key: 'attachmentAliases', value: aliases });
+
     const searchNotes = async (q) => {
         const query = q.trim();
         if (!query) return [];
@@ -223,6 +228,7 @@
         getTopology, getFavorites, toggleFavorite, getHomeNoteId, setHomeNoteId, getFontSize, setFontSize, getSectionVisibility,
         setSectionVisibility, getThemes, getTheme, saveTheme, deleteTheme, getActiveThemeId, setActiveThemeId,
         getSortOrder, setSortOrder,
+        getAttachmentAliases, saveAttachmentAliases,
         searchNotes, getAllNotes, getAllNotesSortedBy, importNotes
     };
 })(window.Jaroet);

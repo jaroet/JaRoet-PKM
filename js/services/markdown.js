@@ -1,5 +1,9 @@
 
 (function(J) {
+    let attachmentAliases = [];
+
+    const setAttachmentAliases = (aliases) => { attachmentAliases = aliases || []; };
+
     const linkRenderer = (hrefOrObj, title, text) => {
         let href = '';
         let linkTitle = title;
@@ -35,10 +39,41 @@
                 const parts = inner.split('|');
                 const title = parts[0].trim();
                 const alias = parts.length > 1 ? parts.slice(1).join('|').trim() : title;
+                
+                // Check for attachment alias match in title
+                for (const a of attachmentAliases) {
+                    if (title.startsWith(a.alias + ':')) {
+                        // It's an attachment link
+                        return { type: 'wikiLink', raw: match[0], title: title, alias: alias, isAttachment: true, attachmentPath: a.path, attachmentAlias: a.alias };
+                    }
+                }
+
                 return { type: 'wikiLink', raw: match[0], title: title, alias: alias };
             }
         },
         renderer(token) {
+            if (token.isAttachment) {
+                const filename = token.title.substring(token.attachmentAlias.length + 1);
+                let aliasPath = token.attachmentPath;
+                let fullUrl;
+
+                // Handle relative paths (starting with . or ..)
+                if (aliasPath.startsWith('.') || aliasPath.startsWith('..')) {
+                    try {
+                        // Normalize backslashes to forward slashes for URL resolution
+                        const normalizedPath = aliasPath.replace(/\\/g, '/');
+                        const separator = normalizedPath.endsWith('/') ? '' : '/';
+                        fullUrl = new URL(normalizedPath + separator + filename, window.location.href).href;
+                    } catch (e) {
+                        const prefix = aliasPath.endsWith('/') || aliasPath.endsWith('\\') ? aliasPath : aliasPath + '/';
+                        fullUrl = 'file://' + prefix + filename;
+                    }
+                } else {
+                    const prefix = aliasPath.endsWith('/') || aliasPath.endsWith('\\') ? aliasPath : aliasPath + '/';
+                    fullUrl = prefix.startsWith('file://') ? prefix + filename : 'file://' + prefix + filename;
+                }
+                return `<a href="${fullUrl}" target="_blank" rel="noopener noreferrer" class="attachment-link text-primary hover:underline cursor-pointer" title="${fullUrl}">📎 ${token.alias}</a>`;
+            }
             return `<a class="internal-link text-primary hover:underline cursor-pointer" data-title="${token.title}">${token.alias}</a>`;
         }
     };
@@ -56,7 +91,8 @@
 
     J.Services.Markdown = {
         createRenderer,
-        wikiLinkExtension
+        wikiLinkExtension,
+        setAttachmentAliases
     };
 
 })(window.Jaroet);
