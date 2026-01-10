@@ -1,9 +1,9 @@
 
 (function(J) {
     const { useState, useEffect, useRef, useCallback } = React;
-    const { db, getTopology, createNote, updateNote, deleteNote, getFavorites, toggleFavorite, seedDatabase, getNote, getAllNotes, importNotes, getHomeNoteId, searchNotes, getFontSize, getNoteCount, getVaultList, getCurrentVaultName, switchVault, getSectionVisibility, findNoteByTitle, getNoteTitlesByPrefix, getSortOrder, setSortOrder: persistSortOrder, getActiveThemeId, getTheme, setActiveThemeId, getThemes } = J.Services.DB;
+    const { db, getTopology, createNote, updateNote, deleteNote, getFavorites, toggleFavorite, seedDatabase, getNote, getAllNotes, importNotes, getHomeNoteId, searchNotes, getFontSize, getNoteCount, getVaultList, getCurrentVaultName, switchVault, getSectionVisibility, findNoteByTitle, getNoteTitlesByPrefix, getSortOrder, setSortOrder: persistSortOrder, getActiveThemeId, getTheme, setActiveThemeId, getThemes, getAttachmentAliases } = J.Services.DB;
     const { goToDate, goToToday, getDateSubtitle } = J.Services.Journal; 
-    const { createRenderer, wikiLinkExtension } = J.Services.Markdown;
+    const { createRenderer, wikiLinkExtension, setAttachmentAliases } = J.Services.Markdown;
     const { NoteCard, LinkerModal, Editor, SettingsModal, ImportModal, RenameModal, NoteSection, TopBar, StatusBar, Icons, AllNotesModal, VaultChooser, APP_VERSION } = J;
     const { useHistory } = J.Hooks;
 
@@ -53,6 +53,10 @@
                 getSortOrder().then(setSortOrder);
                 getFavorites().then(setFavs);
                 getThemes().then(setThemes);
+                getAttachmentAliases().then(a => {
+                    setAttachmentAliases(a);
+                    // Force re-render of content if needed, though markdown parsing happens in Editor/NoteSection
+                });
                 
                 // Load Theme
                 const tId = await getActiveThemeId();
@@ -421,7 +425,10 @@
                     const t = await getTheme(tId);
                     if(t) applyTheme(t);
                     getThemes().then(setThemes);
-                }} onSettingsChange=${()=>getSectionVisibility().then(setVis)} initialTab=${sett.initialTab} focusOn=${sett.focusOn} />
+                }} onSettingsChange=${async ()=>{
+                    getSectionVisibility().then(setVis);
+                    setAttachmentAliases(await getAttachmentAliases());
+                }} initialTab=${sett.initialTab} focusOn=${sett.focusOn} />
                 <${ImportModal} isOpen=${imp} importData=${impD} onClose=${()=>setImp(false)} onConfirm=${async m=>{await importNotes(impD,m);setImp(false);window.location.reload()}} />
                 <${RenameModal} isOpen=${ren} currentTitle=${renN?renN.title:''} onClose=${()=>setRen(false)} onRename=${t=>{updateNote(renN.id,{title:t});setRen(false);getTopology(currentId).then(setTopo);}} />
                 <${AllNotesModal} isOpen=${allNotes} onClose=${()=>setAllNotes(false)} onSelect=${id=>{setAllNotes(false);nav(id);}} />

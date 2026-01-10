@@ -5,7 +5,8 @@
         getHomeNoteId, getNote, getSectionVisibility, 
         createVault, deleteCurrentVault, resetCurrentVault, 
         setHomeNoteId, setFontSize: dbSetFontSize, getThemes, getTheme, saveTheme, deleteTheme, getActiveThemeId, setActiveThemeId,
-        setSectionVisibility, getCurrentVaultName, searchNotes 
+        setSectionVisibility, getCurrentVaultName, searchNotes,
+        getAttachmentAliases, saveAttachmentAliases
     } = J.Services.DB;
 
     J.SettingsModal = ({isOpen, onClose, currentCentralNoteId, fontSize, onFontSizeChange, onThemeChange, onSettingsChange, initialTab, focusOn}) => {
@@ -25,6 +26,10 @@
         const [confReset, setConfReset] = useState(false);
         const [curVault, setCurVault] = useState('');
         const [dbLocation, setDbLocation] = useState('');
+        const [aliases, setAliases] = useState([]);
+        const [aliasName, setAliasName] = useState('');
+        const [aliasPath, setAliasPath] = useState('');
+        const [editingIndex, setEditingIndex] = useState(-1);
         const newVaultInputRef = useRef(null);
 
         // Initialize
@@ -68,6 +73,9 @@
                     setCurThemeId(active);
                     const t = ts.find(x => x.id === active);
                     if(t) setEditingTheme(JSON.parse(JSON.stringify(t)));
+
+                    // Load Aliases
+                    setAliases(await getAttachmentAliases());
                 };
                 init();
             }
@@ -127,6 +135,39 @@
             onSettingsChange();
         };
 
+        const handleSaveAlias = async () => {
+            if (!aliasName.trim() || !aliasPath.trim()) return;
+            let newAliases = [...aliases];
+            if (editingIndex >= 0) {
+                newAliases[editingIndex] = { alias: aliasName.trim(), path: aliasPath.trim() };
+                setEditingIndex(-1);
+            } else {
+                newAliases.push({ alias: aliasName.trim(), path: aliasPath.trim() });
+            }
+            setAliases(newAliases);
+            await saveAttachmentAliases(newAliases);
+            setAliasName('');
+            setAliasPath('');
+            onSettingsChange();
+        };
+
+        const handleEditAlias = (index) => {
+            const a = aliases[index];
+            setAliasName(a.alias);
+            setAliasPath(a.path);
+            setEditingIndex(index);
+        };
+
+        const handleDeleteAlias = async (index) => {
+            const newAliases = aliases.filter((_, i) => i !== index);
+            setAliases(newAliases);
+            await saveAttachmentAliases(newAliases);
+            if (editingIndex === index) handleCancelEdit();
+            onSettingsChange();
+        };
+
+        const handleCancelEdit = () => { setEditingIndex(-1); setAliasName(''); setAliasPath(''); };
+
         // Helper for preview highlighting
         const hl = (vars) => vars.includes(highlightedVar) ? 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-transparent z-10' : '';
         const hlText = (vars) => vars.includes(highlightedVar) ? 'text-yellow-600 dark:text-yellow-400 font-bold' : '';
@@ -145,7 +186,7 @@
 
                     <!-- Tabs -->
                     <div className="flex border-b border-gray-200 dark:border-gray-800 px-6">
-                        ${['general', 'theme', 'database'].map(t => html`
+                        ${['general', 'theme', 'database', 'attachments'].map(t => html`
                             <button 
                                 key=${t}
                                 onClick=${() => setTab(t)}
@@ -374,6 +415,57 @@
                                             ${confDel ? 'Confirm: DELETE VAULT PERMANENTLY' : 'Delete Current Vault'}
                                         </button>
                                         ${confDel && html`<p className="text-xs text-red-500 mt-1 text-center">Warning: This vault and all its data will be destroyed.</p>`}
+                                    </div>
+                                </div>
+                            </div>
+                        `}
+
+                        ${tab === 'attachments' && html`
+                            <div className="space-y-6">
+                                <div>
+                                    <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Attachment Aliases</h3>
+                                    <div className="space-y-4">
+                                        <div className="flex gap-2 items-end">
+                                            <div className="flex-1">
+                                                <label className="block text-xs font-medium text-gray-500 mb-1">Alias (e.g. "ds")</label>
+                                                <input type="text" value=${aliasName} onChange=${e => setAliasName(e.target.value)} className="w-full p-2 rounded border border-gray-300 dark:border-gray-700 bg-background outline-none focus:ring-1 focus:ring-primary" placeholder="Alias" />
+                                            </div>
+                                            <div className="flex-[2]">
+                                                <label className="block text-xs font-medium text-gray-500 mb-1">Path (e.g. "/Users/docs")</label>
+                                                <input type="text" value=${aliasPath} onChange=${e => setAliasPath(e.target.value)} className="w-full p-2 rounded border border-gray-300 dark:border-gray-700 bg-background outline-none focus:ring-1 focus:ring-primary" placeholder="Full Folder Path" />
+                                            </div>
+                                            <button onClick=${handleSaveAlias} disabled=${!aliasName.trim() || !aliasPath.trim()} className="px-4 py-2 bg-primary text-white rounded hover:opacity-90 disabled:opacity-50 mb-[1px]">
+                                                ${editingIndex >= 0 ? 'Update' : 'Add'}
+                                            </button>
+                                            ${editingIndex >= 0 && html`
+                                                <button onClick=${handleCancelEdit} className="px-3 py-2 bg-gray-200 dark:bg-gray-700 text-foreground rounded hover:opacity-80 mb-[1px]">Cancel</button>
+                                            `}
+                                        </div>
+
+                                        <div className="border rounded-lg border-gray-200 dark:border-gray-700 overflow-hidden">
+                                            <table className="w-full text-sm text-left">
+                                                <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 font-medium">
+                                                    <tr>
+                                                        <th className="px-4 py-2 w-1/4">Alias</th>
+                                                        <th className="px-4 py-2">Path</th>
+                                                        <th className="px-4 py-2 w-24 text-right">Actions</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                                                    ${aliases.length === 0 ? html`<tr><td colSpan="3" className="px-4 py-4 text-center text-gray-400 italic">No aliases defined.</td></tr>` : aliases.map((a, i) => html`
+                                                        <tr key=${i} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                                            <td className="px-4 py-2 font-mono text-primary">${a.alias}</td>
+                                                            <td className="px-4 py-2 font-mono text-xs opacity-80 break-all">${a.path}</td>
+                                                            <td className="px-4 py-2 text-right">
+                                                                <button onClick=${() => handleEditAlias(i)} className="text-blue-500 hover:underline mr-3">Edit</button>
+                                                                <button onClick=${() => handleDeleteAlias(i)} className="text-red-500 hover:underline">Delete</button>
+                                                            </td>
+                                                        </tr>
+                                                    `)}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        <p className="text-xs text-gray-400">Use <code>[[alias:filename.ext]]</code> in your notes. It will link to <code>file:///path/filename.ext</code>.</p>
                                     </div>
                                 </div>
                             </div>
