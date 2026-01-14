@@ -13,7 +13,7 @@
 
 ## Documentation
 
-For a detailed guide on how to use the interface, shortcuts, and features, please read the [Full Documentation](docs/documentation.md). Join me at [Discord](https://github.com/jaroet/JaRoet-PKM/discussions) to discuss any remarks, questions or suggestions you have. 
+For a detailed guide on how to use the interface, shortcuts, and features, please read the [Full Documentation](docs/documentation.md). Join me at [Discord](https://discord.com/channels/1458852555135123722) to discuss any remarks, questions or suggestions you have. 
 
 ## Getting Started
 
@@ -35,7 +35,7 @@ So I thought about building one myself. I had thought that before but now, with 
 * **Mardown support** for the notes. Once you use Markdown I find it hard to go back to rich text editors :-).
 * **A visual-ish representation of the data** as the base of the app. I want to see all the different relations of my current focused note.   
 
-With these minimal requirements set I started up AIStudio.google.com and started prompting. The results came fast and where of a quality I could not have done myself. I kept on trying and the result is the JaRoet-PKM tool. I invite you to try it and join me at [Discord](https://github.com/jaroet/JaRoet-PKM/discussions) to discuss any remarks, questions or suggestions you have. 
+With these minimal requirements set I started up AIStudio.google.com and started prompting. The results came fast and where of a quality I could not have done myself. I kept on trying and the result is the JaRoet-PKM tool. I invite you to try it and join me at [[Discord](https://discord.com/channels/1458852555135123722)to discuss any remarks, questions or suggestions you have. 
 
 This is project run in the spare evening hours but I will try to respond quickly. AI is a great time-saver, I started only a few days ago, but not infallible. So let me know if you find any bugs (use the [issue tracker](https://github.com/jaroet/JaRoet-PKM/issues) to log them.
 
