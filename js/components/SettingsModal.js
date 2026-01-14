@@ -32,6 +32,24 @@
         const [editingIndex, setEditingIndex] = useState(-1);
         const newVaultInputRef = useRef(null);
 
+        // Tab Navigation
+        useEffect(() => {
+            if (!isOpen) return;
+            const handleKeyDown = (e) => {
+                if (e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+                    if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+                    e.preventDefault();
+                    const tabs = ['general', 'theme', 'database', 'attachments'];
+                    const curr = tabs.indexOf(tab);
+                    const dir = e.key === 'ArrowRight' ? 1 : -1;
+                    const next = (curr + dir + tabs.length) % tabs.length;
+                    setTab(tabs[next]);
+                }
+            };
+            window.addEventListener('keydown', handleKeyDown);
+            return () => window.removeEventListener('keydown', handleKeyDown);
+        }, [isOpen, tab]);
+
         // Initialize
         useEffect(() => {
             if (isOpen) {
