@@ -19,6 +19,23 @@
         const [notes, setNotes] = useState([]);
         const [sortBy, setSortBy] = useState('modifiedAt'); // 'modifiedAt' or 'createdAt'
 
+        // Tab Navigation
+        useEffect(() => {
+            if (!isOpen) return;
+            const handleKeyDown = (e) => {
+                if (e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+                    e.preventDefault();
+                    const options = ['modifiedAt', 'createdAt'];
+                    const curr = options.indexOf(sortBy);
+                    const dir = e.key === 'ArrowRight' ? 1 : -1;
+                    const next = (curr + dir + options.length) % options.length;
+                    setSortBy(options[next]);
+                }
+            };
+            window.addEventListener('keydown', handleKeyDown);
+            return () => window.removeEventListener('keydown', handleKeyDown);
+        }, [isOpen, sortBy]);
+
         useEffect(() => {
             if (isOpen) {
                 getAllNotesSortedBy(sortBy).then(setNotes);

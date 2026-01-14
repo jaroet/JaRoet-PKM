@@ -3,6 +3,16 @@
 
 All notable changes to the JaRoet PKM project will be documented in this file.
 
+## [0.6.0] - 2026-01-07
+
+### Features
+- **Mentions (Backlinks)**: Added a "Mentions" tab to the right pane. This view lists all notes that link *to* the currently active note, allowing for better bi-directional navigation.
+- **Attachment Aliases**: Introduced a system to map short aliases to local file system paths. You can now link to external files using `[[alias:filename.ext]]` syntax. Configure these aliases in the new "Attachments" tab in Settings.
+- **Tab Navigation Hotkeys**: Added global `Shift+Left` and `Shift+Right` shortcuts to cycle through tabs in the Right Pane (Siblings/Mentions), Settings Modal, and All Notes Modal.
+
+### Improvements
+- **Right Pane**: The right pane now uses a tabbed interface to accommodate both Siblings and Mentions, keeping the interface clean while providing more context.
+
 ## [0.5.2] - 2026-01-06
 
 ### Features

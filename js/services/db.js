@@ -11,6 +11,25 @@
         this.version(1).stores({notes:'id,title,*linksTo,*relatedTo',meta:'key'});
         this.version(2).stores({notes:'id,title,*linksTo,*relatedTo,createdAt,modifiedAt'});
         this.version(3).stores({notes:'id,title,*linksTo,*relatedTo,createdAt,modifiedAt', themes: 'id'});
+        this.version(4).stores({notes:'id,title,*linksTo,*relatedTo,*outgoingLinks,createdAt,modifiedAt', themes: 'id'}).upgrade(async tx => {
+            const notes = await tx.table('notes').toArray();
+            const titleMap = new Map(notes.map(n => [n.title.toLowerCase(), n.id]));
+            const regex = /\[\[([^|\]\n]+)(?:\|[^\]\n]*)?\]\]/g;
+            const updates = [];
+            for (const note of notes) {
+                const outgoingLinks = new Set();
+                if (note.content) {
+                    let match;
+                    while ((match = regex.exec(note.content)) !== null) {
+                        const t = match[1].trim().toLowerCase();
+                        if (titleMap.has(t)) outgoingLinks.add(titleMap.get(t));
+                    }
+                }
+                note.outgoingLinks = Array.from(outgoingLinks);
+                updates.push(note);
+            }
+            if (updates.length > 0) await tx.table('notes').bulkPut(updates);
+        });
     }}
     const db=new DB(); 
 
@@ -133,7 +152,7 @@
     const getNote=(id)=>db.notes.get(id);
     const findNoteByTitle=(t)=>db.notes.where('title').equalsIgnoreCase(t).first();
     const getNoteTitlesByPrefix=async(p)=>(await db.notes.where('title').startsWith(p).toArray()).map(n=>n.title);
-    const createNote=async(t)=>{const n={id:crypto.randomUUID(),title:t,content:'',linksTo:[],relatedTo:[],isFavorite:false,createdAt:Date.now(),modifiedAt:Date.now()};await db.notes.add(n);return n;};
+    const createNote=async(t)=>{const n={id:crypto.randomUUID(),title:t,content:'',linksTo:[],relatedTo:[],outgoingLinks:[],isFavorite:false,createdAt:Date.now(),modifiedAt:Date.now()};await db.notes.add(n);return n;};
     const updateNote=(id,u)=>db.notes.update(id,{...u,modifiedAt:Date.now()});
     const deleteNote=async(id)=>db.transaction('rw',db.notes,db.meta,async()=>{await db.notes.delete(id);await db.notes.where('linksTo').equals(id).modify(n=>{n.linksTo=n.linksTo.filter(x=>x!==id);n.modifiedAt=Date.now();});await db.notes.where('relatedTo').equals(id).modify(n=>{n.relatedTo=n.relatedTo.filter(x=>x!==id);n.modifiedAt=Date.now();});const f=await db.meta.get('favoritesList');if(f&&f.value.includes(id))await db.meta.put({key:'favoritesList',value:f.value.filter(x=>x!==id)});});
     const getNoteCount=()=>db.notes.count();
@@ -215,7 +234,7 @@
             for(const n of notes){
                 let t=n.title,c=1,r=false;while(ex.has(t.toLowerCase())){t=`${n.title} (${c++})`;r=true;}ex.add(t.toLowerCase());
                 const nid=map.get(n.id);if(r)ren.push(nid);
-                add.push({...n,id:nid,title:t,linksTo:n.linksTo.map(x=>map.get(x)).filter(Boolean),relatedTo:n.relatedTo.map(x=>map.get(x)).filter(Boolean)});
+                add.push({...n,id:nid,title:t,linksTo:n.linksTo.map(x=>map.get(x)).filter(Boolean),relatedTo:n.relatedTo.map(x=>map.get(x)).filter(Boolean),outgoingLinks:(n.outgoingLinks||[]).map(x=>map.get(x)).filter(Boolean)});
             }
             if(ren.length)add.push({id:crypto.randomUUID(),title:`import_${Date.now()}`,content:'Renamed items',linksTo:ren,relatedTo:[],isFavorite:false,createdAt:Date.now(),modifiedAt:Date.now()});
             for(let i=0;i<add.length;i+=50)await db.notes.bulkAdd(add.slice(i,i+50));

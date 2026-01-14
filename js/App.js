@@ -4,7 +4,7 @@
     const { db, getTopology, createNote, updateNote, deleteNote, getFavorites, toggleFavorite, seedDatabase, getNote, getAllNotes, importNotes, getHomeNoteId, searchNotes, getFontSize, getNoteCount, getVaultList, getCurrentVaultName, switchVault, getSectionVisibility, findNoteByTitle, getNoteTitlesByPrefix, getSortOrder, setSortOrder: persistSortOrder, getActiveThemeId, getTheme, setActiveThemeId, getThemes, getAttachmentAliases } = J.Services.DB;
     const { goToDate, goToToday, getDateSubtitle } = J.Services.Journal; 
     const { createRenderer, wikiLinkExtension, setAttachmentAliases } = J.Services.Markdown;
-    const { NoteCard, LinkerModal, Editor, SettingsModal, ImportModal, RenameModal, NoteSection, TopBar, StatusBar, Icons, AllNotesModal, VaultChooser, APP_VERSION } = J;
+    const { NoteCard, LinkerModal, Editor, SettingsModal, ImportModal, RenameModal, NoteSection, TopBar, StatusBar, Icons, AllNotesModal, VaultChooser, APP_VERSION, Components: { SectionContainer } } = J;
     const { useHistory } = J.Hooks;
 
     marked.use({renderer:createRenderer({clickableCheckboxes:false}),extensions:[wikiLinkExtension]});
@@ -12,12 +12,12 @@
     J.App = () => {
         // --- State ---
         const {currentId,visit,replace,back,forward,canBack,canForward}=useHistory();
-        const [topo,setTopo]=useState({center:null,uppers:[],downers:[],lefters:[],righters:[]}),[favs,setFavs]=useState([]),[dark,setDark]=useState(true),[fs,setFs]=useState(16),[vis,setVis]=useState({showFavorites:true,showContent:true}),[count,setCount]=useState(0),[themes,setThemes]=useState([]);
+        const [topo,setTopo]=useState({center:null,uppers:[],downers:[],lefters:[],righters:[]}),[favs,setFavs]=useState([]),[dark,setDark]=useState(true),[fs,setFs]=useState(16),[vis,setVis]=useState({showFavorites:true,showContent:true}),[count,setCount]=useState(0),[themes,setThemes]=useState([]), [mentions, setMentions] = useState([]);
         const [sortOrder, setSortOrder] = useState('title-asc');
         
         // Navigation State
         const [fSec,setFSec]=useState('center'),[fIdx,setFIdx]=useState(0),[sel,setSel]=useState(new Set());
-        const [secInd,setSecInd]=useState({up:0,down:0,left:0,right:0,favs:0});
+        const [secInd,setSecInd]=useState({up:0,down:0,left:0,right:0,favs:0,mentions:0});
         const scrollRef=useRef({});
         
         // Refs for Event Listeners
@@ -28,6 +28,7 @@
         const favsRef=useRef([]);
         const visRef=useRef({showFavorites:true,showContent:true});
         const secIndRef=useRef({up:0,down:0,left:0,right:0,favs:0});
+        const mentionsRef=useRef([]);
 
         // UI State & Modals (removed `menu` and `setMenu`)
         const [favDrop,setFavDrop]=useState(false),[cal,setCal]=useState(false),[calD,setCalD]=useState(new Set());
@@ -83,6 +84,18 @@
             }
         },[currentId]);
 
+        useEffect(() => {
+            if (!topo.center) {
+                setMentions([]);
+                return;
+            }
+            let isMounted = true;
+            db.notes.where('outgoingLinks').equals(topo.center.id).toArray().then(m => {
+                if (isMounted) setMentions(m);
+            });
+            return () => { isMounted = false; };
+        }, [topo.center]);
+
         // Sync Refs
         useEffect(()=>{selRef.current=sel},[sel]);
         useEffect(()=>{fSecRef.current=fSec},[fSec]);
@@ -91,6 +104,7 @@
         useEffect(()=>{favsRef.current=favs},[favs]);
         useEffect(()=>{visRef.current=vis},[vis]);
         useEffect(()=>{secIndRef.current=secInd},[secInd]);
+        useEffect(()=>{mentionsRef.current=mentions},[mentions]);
 
         // Helper: Get Sorted Notes
         const sortNotes = useCallback((notes) => {
@@ -107,9 +121,15 @@
             }
         }, [sortOrder]);
 
-        const getSortedNotes = (sec, t=topo, f=favs) => {
+        const getSortedNotes = (sec, t=topo, f=favs, m=mentions) => {
             if(sec==='center')return t.center?[t.center]:[];
-            let n=[]; if(sec==='up')n=t.uppers;else if(sec==='down')n=t.downers;else if(sec==='left')n=t.lefters;else if(sec==='right')n=t.righters;else if(sec==='favs')n=f;
+            let n=[]; 
+            if(sec==='up')n=t.uppers;
+            else if(sec==='down')n=t.downers;
+            else if(sec==='left')n=t.lefters;
+            else if(sec==='right')n=t.righters;
+            else if(sec==='favs')n=f;
+            else if(sec==='mentions')n=m;
             return sortNotes(n);
         };
 
@@ -224,13 +244,12 @@
         const activeHasContent = activeNote && activeNote.content && activeNote.content.trim().length > 0;
         const subT=topo.center?getDateSubtitle(topo.center.title):null;
         const sp={fontSize:fs,focusedSection:fSec,focusedIndex:fIdx,selectedNoteIds:sel,centralNoteId:currentId,onNoteClick:(id,c)=>c?togSel(id):id!==currentId&&nav(id),scrollPositionsRef:scrollRef};
-        const labelStyle = "absolute -top-[5px] left-6 px-3 py-0.5 font-bold tracking-wider bg-card text-primary select-none z-20 pointer-events-none rounded-full border border-black/10 dark:border-white/10 text-xs";
         const canUnlink = sel.size > 0 || ['up', 'down', 'left'].includes(fSec);
 
         // --- KEYBOARD HANDLER ---
         const handleGlobalKeyDown = useCallback(async (e) => {
             console.log(`%cGLOBAL KEYDOWN: key='${e.key}', sAct=${sAct}`, 'color: red');
-            const selState=selRef.current, fSecState=fSecRef.current, fIdxState=fIdxRef.current, topoState=topoRef.current, favsState=favsRef.current, visState=visRef.current, secIndState=secIndRef.current;
+            const selState=selRef.current, fSecState=fSecRef.current, fIdxState=fIdxRef.current, topoState=topoRef.current, favsState=favsRef.current, visState=visRef.current, secIndState=secIndRef.current, mentionsState=mentionsRef.current;
             if (ren||ed||lnk||sett||imp||cal||favDrop||allNotes||vaultChooser) { if (e.key === 'Escape') { if(cal) setCal(false); if(favDrop) setFavDrop(false); if(allNotes) setAllNotes(false); if(vaultChooser) setVaultChooser(false); } return; }
             if (sAct) {
                 if (e.key==='Escape') { setSAct(false); setFSec('center'); e.preventDefault(); return; }
@@ -265,43 +284,63 @@
             if (e.key === 'Enter') { e.preventDefault(); setFSec('center'); return; }
             if (e.key === ' ') { e.preventDefault(); const n = getFocusedNote(); if(n && n.id !== currentId) nav(n.id); return; }
             
+            // Tab Switching (Shift+Arrow)
+            if (e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+                if (['right', 'mentions'].includes(fSecState)) {
+                    e.preventDefault();
+                    const tabs = ['right', 'mentions'];
+                    const currentIndex = tabs.indexOf(fSecState);
+                    const direction = e.key === 'ArrowRight' ? 1 : -1;
+                    const nextTab = tabs[(currentIndex + direction + tabs.length) % tabs.length];
+                    
+                    // Restore index for the new tab
+                    const nextList = getSortedNotes(nextTab, topoState, favsState, mentionsState);
+                    const savedIdx = secIndState[nextTab] || 0;
+                    const newIdx = Math.min(savedIdx, Math.max(0, nextList.length - 1));
+                    
+                    setFSec(nextTab);
+                    setFIdx(newIdx);
+                    return;
+                }
+            }
+
             // --- ARROW NAV ---
             if (e.key === 'ArrowUp') {
                 e.preventDefault();
                 if(fSecState==='center'){ if(topoState.uppers.length){ setFSec('up'); setFIdx(Math.min(secIndState.up, topoState.uppers.length-1)); } }
-                else if(fSecState==='content'){ setFSec('right'); setFIdx(Math.min(secIndState.right, topoState.righters.length-1)); }
+                else if(fSecState==='content'){ if (topoState.righters.length) { setFSec('right'); setFIdx(topoState.righters.length - 1); } else if (mentions.length) { setFSec('mentions'); setFIdx(mentions.length - 1); } }
                 else if(fSecState==='down'){ if(fIdxState===0) setFSec('center'); else setFIdx(p=>p-1); }
                 else if(fSecState==='favs'){ if(fIdxState===0){ setFSec('left'); setFIdx(Math.min(secIndState.left, topoState.lefters.length-1)); } else setFIdx(p=>p-1); }
                 else setFIdx(p=>Math.max(0,p-1));
             }
             if (e.key === 'ArrowDown') {
                 e.preventDefault();
-                const list = getSortedNotes(fSecState, topoState, favsState);
+                const list = getSortedNotes(fSecState, topoState, favsState, mentionsState);
                 if(fSecState==='center'){ if(topoState.downers.length){ setFSec('down'); setFIdx(Math.min(secIndState.down, topoState.downers.length-1)); } }
                 else if(fSecState==='content') return;
                 else if(fSecState==='up'){ if(fIdxState===list.length-1) setFSec('center'); else setFIdx(p=>p+1); }
                 else if(fSecState==='left'){ if(fIdxState===list.length-1){ if(visState.showFavorites&&favsState.length){ setFSec('favs'); setFIdx(Math.min(secIndState.favs, favsState.length-1)); } } else setFIdx(p=>p+1); }
-                else if(fSecState==='right'){ if(fIdxState===list.length-1){ if(visState.showContent){ setFSec('content'); } } else setFIdx(p=>p+1); }
+                else if(fSecState==='right' || fSecState === 'mentions'){ if(fIdxState===list.length-1){ if(visState.showContent){ setFSec('content'); } } else setFIdx(p=>p+1); }
                 else setFIdx(p=>Math.min(list.length-1,p+1));
             }
             if (e.key === 'ArrowLeft') {
                 e.preventDefault();
-                if(['up','down','left','right','favs'].includes(fSecState)){ const cols = getItemsPerColumn(`container-${fSecState}`); if(fIdxState - cols >= 0){ setFIdx(p=>p-cols); return; } }
+                if(['up','down','left','right','favs', 'mentions'].includes(fSecState)){ const cols = getItemsPerColumn(`container-${fSecState}`); if(fIdxState - cols >= 0){ setFIdx(p=>p-cols); return; } }
                 if(fSecState==='content'){ setFSec('down'); setFIdx(Math.min(secIndState.down, topoState.downers.length-1)); }
                 else if(fSecState==='center'){ if(topoState.lefters.length){ setFSec('left'); setFIdx(Math.min(secIndState.left, topoState.lefters.length-1)); } else if(visState.showFavorites&&favsState.length){ setFSec('favs'); setFIdx(0); } }
-                else if(fSecState==='right'){ setFSec('up'); setFIdx(Math.min(secIndState.up, topoState.uppers.length-1)); }
+                else if(fSecState==='right' || fSecState === 'mentions'){ setFSec('up'); setFIdx(Math.min(secIndState.up, topoState.uppers.length-1)); }
                 else if(fSecState==='down'){ if(visState.showFavorites&&favsState.length){ setFSec('favs'); setFIdx(Math.min(secIndState.favs, favsState.length-1)); } else { setFSec('left'); setFIdx(Math.min(secIndState.left, topoState.lefters.length-1)); } }
                 else if(fSecState==='up'){ setFSec('left'); setFIdx(Math.min(secIndState.left, topoState.lefters.length-1)); }
             }
             if (e.key === 'ArrowRight') {
                 e.preventDefault();
-                if(['up','down','left','right','favs'].includes(fSecState)){ const cols = getItemsPerColumn(`container-${fSecState}`); const list = getSortedNotes(fSecState, topoState, favsState); if(fIdxState + cols < list.length){ setFIdx(p=>p+cols); return; } }
+                if(['up','down','left','right','favs', 'mentions'].includes(fSecState)){ const cols = getItemsPerColumn(`container-${fSecState}`); const list = getSortedNotes(fSecState, topoState, favsState, mentions); if(fIdxState + cols < list.length){ setFIdx(p=>p+cols); return; } }
                 if(fSecState==='content') return;
-                if(fSecState==='center'){ if(topo.righters.length){ setFSec('right'); setFIdx(Math.min(secIndState.right, topo.righters.length-1)); } else if(vis.showContent) setFSec('content'); }
+                if(fSecState==='center'){ if(topo.righters.length){ setFSec('right'); setFIdx(Math.min(secIndState.right, topo.righters.length-1)); } else if (mentions.length) { setFSec('mentions'); setFIdx(Math.min(secIndState.mentions, mentions.length-1)); } else if(vis.showContent) setFSec('content'); }
                 else if(fSecState==='left'){ setFSec('up'); setFIdx(Math.min(secIndState.up, topo.uppers.length-1)); }
                 else if(fSecState==='favs'){ setFSec('down'); setFIdx(Math.min(secIndState.down, topo.downers.length-1)); }
-                else if(fSecState==='up'){ setFSec('right'); setFIdx(Math.min(secIndState.right, topo.righters.length-1)); }
-                else if(fSecState==='down'){ if(vis.showContent){ setFSec('content'); } else if(topo.righters.length){ setFSec('right'); setFIdx(Math.min(secIndState.right, topo.righters.length-1)); } }
+                else if(fSecState==='up'){ if(topo.righters.length){ setFSec('right'); setFIdx(Math.min(secIndState.right, topo.righters.length-1)); } else if (mentions.length) { setFSec('mentions'); setFIdx(Math.min(secIndState.mentions, mentions.length-1)); } }
+                else if(fSecState==='down'){ if(vis.showContent){ setFSec('content'); } else if(topo.righters.length){ setFSec('right'); setFIdx(Math.min(secIndState.right, topo.righters.length-1)); } else if (mentions.length) { setFSec('mentions'); setFIdx(Math.min(secIndState.mentions, mentions.length-1)); } }
             }
         }, [currentId, back, forward, sRes, sIdx, sAct, ren, ed, lnk, sett, imp, cal, favDrop, goToRandomNote]);
 
@@ -339,29 +378,25 @@
                     <div className="flex h-full w-full gap-3 canvas-flex-container">
                         <!-- Left Col -->
                         <div className="flex flex-col gap-3 w-1/4">
-                            <div className=${`${vis.showFavorites?'flex-1':'h-full'} relative bg-card rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0`}>
-                                <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Related (${topo.lefters.length})</div>
-                                <${NoteSection} notes=${sortNotes(topo.lefters)} section="left" containerClasses="absolute inset-0 flex flex-col gap-0 overflow-y-auto p-3 custom-scrollbar rounded-3xl pt-6" itemClasses="w-full" containerId="container-left" ...${sp} />
-                            </div>
+                            <${SectionContainer} title="Related" count=${topo.lefters.length} className=${vis.showFavorites?'flex-1':'h-full'}>
+                                <${NoteSection} notes=${sortNotes(topo.lefters)} section="left" containerClasses="absolute inset-0 flex flex-col gap-0 overflow-y-auto p-3 custom-scrollbar rounded-b-3xl" itemClasses="w-full" containerId="container-left" ...${sp} />
+                            </${SectionContainer}>
                             ${vis.showFavorites&&html`
-                                <div className="flex-1 relative bg-card rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
-                                    <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Favorites (${favs.length})</div>
-                                    <${NoteSection} notes=${sortNotes(favs)} section="favs" containerClasses="absolute inset-0 flex flex-col gap-0 overflow-y-auto p-3 custom-scrollbar rounded-3xl pt-6" itemClasses="w-full" containerId="container-favs" ...${sp} />
-                                </div>
+                                <${SectionContainer} title="Favorites" count=${favs.length} className="flex-1">
+                                    <${NoteSection} notes=${sortNotes(favs)} section="favs" containerClasses="absolute inset-0 flex flex-col gap-0 overflow-y-auto p-3 custom-scrollbar rounded-b-3xl" itemClasses="w-full" containerId="container-favs" ...${sp} />
+                                </${SectionContainer}>
                             `}
                         </div>
 
                         <!-- Center Col -->
                         <div className="flex flex-col gap-3 w-1/2">
                             <div className="flex-1 flex flex-col gap-3 min-h-0">
-                                <div className="flex-[7] relative bg-card rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
-                                    <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Parents (${topo.uppers.length})</div>
-                                    <div className="absolute inset-0 overflow-x-auto overflow-y-hidden custom-scrollbar rounded-3xl pt-6">
+                                <${SectionContainer} title="Parents" count=${topo.uppers.length} className="flex-[7]">
+                                    <div className="absolute inset-0 overflow-x-auto overflow-y-hidden custom-scrollbar rounded-b-3xl">
                                         <${NoteSection} notes=${sortNotes(topo.uppers)} section="up" containerClasses="h-full w-fit flex flex-col flex-wrap content-start gap-0 p-3 mx-auto" itemClasses="w-[300px] flex-shrink-0" containerId="container-up" ...${sp} />
                                     </div>
-                                </div>
-                                <div className="flex-[3] relative flex items-center justify-center p-4 z-10 bg-card rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
-                                    <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Active Note</div>
+                                </${SectionContainer}>
+                                <${SectionContainer} title="Active Note" className="flex-[3] z-10" contentClasses="flex-1 min-h-0 relative flex items-center justify-center p-4">
                                     ${topo.center&&html`
                                         <${NoteCard} note=${topo.center} isCenter=${true} isFocused=${fSec==='center'} fontSize=${fs} onClick=${()=>{}} subtitle=${subT} />
                                         <div className="absolute bottom-4 right-4 flex gap-1 pointer-events-none text-yellow-600 drop-shadow-sm">
@@ -369,29 +404,17 @@
                                             ${topo.center.content&&html`<${Icons.Edit} width="14" height="14" fill="currentColor" />`}
                                         </div>
                                     `}
-                                </div>
+                                </${SectionContainer}>
                             </div>
-                            <div className="flex-1 relative bg-card rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0">
-                                <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Children (${topo.downers.length})</div>
-                                <div className="absolute inset-0 overflow-x-auto overflow-y-hidden custom-scrollbar rounded-3xl pt-6">
+                            <${SectionContainer} title="Children" count=${topo.downers.length} className="flex-1">
+                                <div className="absolute inset-0 overflow-x-auto overflow-y-hidden custom-scrollbar rounded-b-3xl">
                                     <${NoteSection} notes=${sortNotes(topo.downers)} section="down" containerClasses="h-full w-fit flex flex-col flex-wrap content-start gap-0 p-3 mx-auto" itemClasses="w-[300px] flex-shrink-0" containerId="container-down" ...${sp} />
                                 </div>
-                            </div>
+                            </${SectionContainer}>
                         </div>
 
                         <!-- Right Col -->
-                        <div className="flex flex-col gap-3 w-1/4">
-                            <div className=${`${vis.showContent?'flex-1':'h-full'} relative bg-card rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0`}>
-                                <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Siblings (${topo.righters.length})</div>
-                                <${NoteSection} notes=${sortNotes(topo.righters)} section="right" containerClasses="flex flex-col gap-0 overflow-y-auto p-3 h-full custom-scrollbar rounded-3xl pt-6" itemClasses="w-full" containerId="container-right" ...${sp} />
-                            </div>
-                            ${vis.showContent&&html`
-                                <div className=${`flex-1 relative bg-card rounded-3xl shadow-lg border border-black/5 dark:border-white/5 min-h-0 outline-none ${fSec==='content'?'ring-2 ring-primary':''}`}>
-                                    <div className=${labelStyle} style=${{fontSize:`${Math.max(10,fs-10)}px`}}>Content</div>
-                                    <div className="absolute inset-0 p-6 overflow-auto custom-scrollbar prose dark:prose-invert max-w-none rounded-3xl pt-8 compact-markdown" onClick=${async(e)=>{if(e.target.classList.contains('internal-link')&&e.target.dataset.title){e.preventDefault();const n=await findNoteByTitle(e.target.dataset.title);if(n)nav(n.id);}}} dangerouslySetInnerHTML=${{__html:prevH}} />
-                                </div>
-                            `}
-                        </div>
+                        <${J.Components.RightPane} activeNote=${topo.center} topology=${topo} mentions=${mentions} sortNotes=${sortNotes} showContent=${vis.showContent} prevH=${prevH} nav=${nav} setFSec=${setFSec} ...${sp} />
                     </div>
                 </div>
 
@@ -401,9 +424,21 @@
                     isOpen=${ed} mode=${edMode} note=${fSec==='center'?topo.center:getSortedNotes(fSec,topo,favs)[fIdx]} 
                     onClose=${()=>setEd(false)} 
                     onSave=${async (id, c) => {
+                        const WIKI_LINK_REGEX = /\[\[([^|\]\n]+)(?:\|[^\]\n]*)?\]\]/g;
+                        const outgoingLinkIds = new Set();
+                        let match;
+                        const allNotes = await getAllNotes();
+                        const titleToIdMap = new Map(allNotes.map(note => [note.title.toLowerCase(), note.id]));
+                        WIKI_LINK_REGEX.lastIndex = 0;
+                        while ((match = WIKI_LINK_REGEX.exec(c)) !== null) {
+                            const linkTitle = match[1].trim().toLowerCase();
+                            if (titleToIdMap.has(linkTitle)) {
+                                outgoingLinkIds.add(titleToIdMap.get(linkTitle));
+                            }
+                        }
                         // Use a transaction to ensure getTopology reads the updated data
                         await db.transaction('rw', db.notes, async () => {
-                            await updateNote(id, { content: c });
+                            await updateNote(id, { content: c, outgoingLinks: Array.from(outgoingLinkIds) });
                             if (id === currentId) {
                                 await getTopology(currentId).then(setTopo);
                             }
