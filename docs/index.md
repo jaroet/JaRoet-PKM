@@ -7,4 +7,3 @@ There is complete [documentation](./documentation.md) and you can also check the
 The functions are inspired by software like [TheBrain](https://www.thebrain.com), [Workflowy](https://www.workflowy.com), [Logseq](https://www.logseq.com) and [Obsidian](https://www.obisidian.md).
 
 ![JaRoet PKM overview](img/jaroet_pkm_overview.png)
-
