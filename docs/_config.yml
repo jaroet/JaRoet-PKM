@@ -1,0 +1,5 @@
+theme: jekyll-theme-cayman
+title: JaRoet PKM
+description: A fast, local-first Personal Knowledge Management tool designed for keyboard power users.
+show_downloads: true
+google_analytics:
