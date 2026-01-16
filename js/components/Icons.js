@@ -43,6 +43,8 @@
         Sort: (p) => html`<${Icon} ...${p} path=${html`<path d="M3 6h18M6 12h12M9 18h6" />`} />`,
         Close: (p) => html`<${Icon} ...${p} path=${html`<line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>`} />`,
         List: (p) => html`<${Icon} ...${p} path=${html`<line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line>`} />`,
-        Shuffle: (p) => html`<${Icon} ...${p} path=${html`<polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line>`} />`
+        Shuffle: (p) => html`<${Icon} ...${p} path=${html`<polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line>`} />`,
+        FileSearch: (p) => html`<${Icon} ...${p} path=${html`<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline>`} />`,
+        Search: (p) => html`<${Icon} ...${p} path=${html`<circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>`} />`
     };
 })(window.Jaroet);

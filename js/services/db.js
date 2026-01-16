@@ -223,6 +223,39 @@
     const getAllNotes=()=>db.notes.toArray();
     const getAllNotesSortedBy=async(field)=>db.notes.orderBy(field).reverse().toArray();
     
+    const searchContent = async (query) => {
+        const q = query.toLowerCase();
+        if (!q) return [];
+        const results = [];
+        
+        // Linear scan of all notes
+        await db.notes.each(note => {
+            if (note.content) {
+                const contentLower = note.content.toLowerCase();
+                const idx = contentLower.indexOf(q);
+                if (idx !== -1) {
+                    // Count occurrences
+                    let count = 0;
+                    let pos = idx;
+                    while (pos !== -1) {
+                        count++;
+                        pos = contentLower.indexOf(q, pos + 1);
+                    }
+                    
+                    // Generate Snippet (approx 40 chars before, 60 after)
+                    const start = Math.max(0, idx - 40);
+                    const end = Math.min(note.content.length, idx + query.length + 60);
+                    let snippet = note.content.substring(start, end);
+                    if (start > 0) snippet = '...' + snippet;
+                    if (end < note.content.length) snippet = snippet + '...';
+
+                    results.push({ id: note.id, title: note.title, snippet, count, modifiedAt: note.modifiedAt, createdAt: note.createdAt });
+                }
+            }
+        });
+        return results.sort((a, b) => b.count - a.count);
+    };
+
     const importNotes=async(notes,mode)=>{
         if(mode==='overwrite'){
             await db.notes.clear();for(let i=0;i<notes.length;i+=50)await db.notes.bulkAdd(notes.slice(i,i+50));
@@ -248,6 +281,6 @@
         setSectionVisibility, getThemes, getTheme, saveTheme, deleteTheme, getActiveThemeId, setActiveThemeId,
         getSortOrder, setSortOrder,
         getAttachmentAliases, saveAttachmentAliases,
-        searchNotes, getAllNotes, getAllNotesSortedBy, importNotes
+        searchNotes, getAllNotes, getAllNotesSortedBy, importNotes, searchContent
     };
 })(window.Jaroet);
