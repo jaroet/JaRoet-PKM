@@ -1,32 +1,57 @@
-# Core Features
+# ✨ Features Overview
 
-This page details some of the key features that make JaRoet PKM a powerful tool for thought.
+JaRoet PKM is packed with features designed to help you think, write, and organize without friction.
 
-## Topological Linking
-Instead of folders, notes are organized by their relationships. This allows you to build a web of knowledge that reflects how you think. The main interface is built around this concept, showing you the local "topology" of any given note.
+## 🧠 Topological Linking
+Instead of folders, notes are organized by their relationships. This allows you to build a web of knowledge that reflects how you think. The main interface shows you the local "topology" of any given note:
+*   **Parents**: Higher-level concepts.
+*   **Children**: Details and sub-notes.
+*   **Siblings**: Related notes sharing the same parent.
+*   **Related**: Lateral connections.
 
-## Journaling
-Press `Ctrl + J` or click the Calendar icon to enter Journal Mode. This feature is designed for daily notes and reflections.
+!Topology Concept
 
-1.  **Automatic Hierarchy**: The app automatically creates or navigates to a date-based structure: `Journal Hub` → `YYYY` → `YYYY-MM` → `YYYY-MM-DD`. This uses the ISO 8601 Date format for easy, predictable sorting.
-2.  **Previous Day Linking**: "Today's" note is automatically linked to "Yesterday's" as a **Related** note, making it easy to review sequential entries.
-3.  **"On This Day" Linking**: "Today's" note is also automatically linked to the same date in previous years (up to 5 years back), providing a quick way to see historical context.
+## 📅 Chronological Journaling
+Press `Ctrl + J` to instantly jump to today's note.
 
-## Mentions (Backlinks)
-The **Mentions** tab in the top-right pane shows all notes that link *to* the currently active note. This is a powerful way to discover connections and see how your ideas relate to each other, even if you didn't explicitly link them from the current note.
+*   **Automatic Hierarchy**: Creates `Year > Month > Day` structure automatically.
+*   **Time Travel**: "Today" links to "Yesterday" for sequential reading.
+*   **On This Day**: See what you wrote on this specific date in previous years.
 
-## Markdown & WikiLinks
-The editor supports Github Flavored Markdown (GFM) and adds special syntax for linking notes and attachments.
+!Journaling
 
-*   **Internal Note Linking**: Type `[[` to open an autocomplete menu of your existing notes.
-    *   Syntax: `[[Note Title]]` or `[[Note Title|Custom Display Text]]`.
-    *   *Navigation*: Clicking an internal link in the Editor or Preview instantly jumps to that note.
-*   **Attachment Linking**: Link to external files on your local machine using aliases.
-    *   Syntax: `[[alias:filename.ext]]`
-    *   This creates a link to `file:///path/to/your/folder/filename.ext`.
-    *   Aliases are configured in the **Settings > Attachments** tab.
-*   **Standard Markdown**:
-    *   **Headers**: `# Title`, `## Section`
-    *   **Emphasis**: `**Bold**`, `*Italic*`, `~~Strikethrough~~`
-    *   **Lists**: `- Bullet point`, `1. Numbered list`, `[ ] Task`
-    *   **External Links**: `Link Text`.
+## 🔒 Local & Offline First
+Your data belongs to you. JaRoet PKM runs entirely in your browser using **IndexedDB**.
+*   **No Cloud Required**: Works perfectly without an internet connection.
+*   **Privacy Focused**: No data is ever sent to a server.
+*   **Persistence**: Automatically requests persistent storage to prevent browser cleanup.
+
+!Security
+
+## 📝 Powerful Markdown Editor
+Write in standard Github Flavored Markdown (GFM) with enhancements for knowledge management.
+*   **WikiLinks**: Type `[[` to auto-complete links to other notes.
+*   **Mentions (Backlinks)**: See what links *to* the current note in a dedicated tab.
+*   **Attachments**: Link to local files using custom aliases (e.g., `[[docs:invoice.pdf]]`).
+*   **Formatting**: Hotkeys for bold, italic, and lists.
+
+## 🎨 Advanced Theming
+Make it yours. JaRoet includes a full theme editor.
+*   **Presets**: Includes Solarized, Nord, GitHub, Dracula, Monokai, and Sepia.
+*   **Customization**: Tweak colors for backgrounds, text, and accents.
+*   **Dark/Light Mode**: Toggle instantly with a click.
+
+!Design
+
+## ⌨️ Keyboard Centric
+Designed for speed. You rarely need to touch the mouse.
+*   **Navigation**: Use Arrow keys to traverse your graph.
+*   **Linking**: `Ctrl + Arrow` to link notes directionally.
+*   **Search**: Press `/` to search instantly.
+*   **Quick Actions**: Rename (`F2`), Delete (`Ctrl+Backspace`), and more.
+
+## 🛠️ Tools & Management
+*   **Multiple Vaults**: Manage separate databases for different projects.
+*   **Import/Export**: Full JSON export and import support.
+*   **Obsidian Converter**: Includes a tool to migrate from Obsidian.
+*   **Global Search**: Fuzzy search with relevance scoring.

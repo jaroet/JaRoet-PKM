@@ -13,7 +13,7 @@
             activeNote, handleFavToggle, setEd, activeHasContent, setRenN, setRen,
             canUnlink, changeRelationship, handleLinkAction,
             search, doSearch, sAct, setSAct, sRes, navSearch,
-            dark, setSett, exportData, setImpD, setImp, setAllNotes, goToRandomNote,
+            dark, setSett, exportData, setImpD, setImp, setAllNotes, goToRandomNote, setContentSearch,
             fontSize, sortOrder, setSortOrder, themes, onThemeSelect
         } = props;
 
@@ -102,6 +102,7 @@
                         `}
                     </div>
 
+                    <${Btn} onClick=${() => setContentSearch(true)} icon=${Icons.Search} title="Content Search (Ctrl+Shift+F)" />
                     <${Btn} onClick=${() => setAllNotes(true)} icon=${Icons.List} title="All Notes" />
                     <${Btn} onClick=${goToRandomNote} icon=${Icons.Shuffle} title="Random Note (Ctrl+Alt+R)" />
 
